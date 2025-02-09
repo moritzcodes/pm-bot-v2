@@ -1,68 +1,60 @@
 'use server';
 
 import { createStreamableValue } from 'ai/rsc';
-import { CoreMessage, streamText } from 'ai';
-import { openai } from '@ai-sdk/openai';
-import { Weather } from '@/components/weather';
-import { generateText } from 'ai';
-import { createStreamableUI } from 'ai/rsc';
-import { ReactNode } from 'react';
-import { z } from 'zod';
+import { Message } from 'ai/react';
+import { OpenAI } from 'openai';
 
-export interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-  display?: ReactNode;
-}
-
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 // Streaming Chat 
-export async function continueTextConversation(messages: CoreMessage[]) {
-  const result = await streamText({
-    model: openai('gpt-4-turbo'),
-    messages,
+export async function continueTextConversation(messages: Message[]) {
+  const threadMessages = messages.map(msg => ({
+    role: msg.role,
+    content: msg.content
+  }));
+
+  const thread = await openai.beta.threads.create({
+    messages: threadMessages.map(msg => ({
+      role: msg.role === 'user' ? 'user' : 'assistant',
+      content: msg.content
+    }))
   });
 
-  const stream = createStreamableValue(result.textStream);
-  return stream.value;
-}
+  const run = await openai.beta.threads.runs.create(
+    thread.id,
+    { assistant_id: process.env.OPENAI_ASSISTANT_ID! }
+  );
 
-// Gen UIs 
-export async function continueConversation(history: Message[]) {
-  const stream = createStreamableUI();
+  const stream = new ReadableStream({
+    async start(controller) {
+      while (true) {
+        const runStatus = await openai.beta.threads.runs.retrieve(
+          thread.id,
+          run.id
+        );
 
-  const { text, toolResults } = await generateText({
-    model: openai('gpt-3.5-turbo'),
-    system: 'You are a friendly weather assistant!',
-    messages: history,
-    tools: {
-      showWeather: {
-        description: 'Show the weather for a given location.',
-        parameters: z.object({
-          city: z.string().describe('The city to show the weather for.'),
-          unit: z
-            .enum(['F'])
-            .describe('The unit to display the temperature in'),
-        }),
-        execute: async ({ city, unit }) => {
-          stream.done(<Weather city={city} unit={unit} />);
-          return `Here's the weather for ${city}!`; 
-        },
-      },
-    },
+        if (runStatus.status === 'completed') {
+          const messages = await openai.beta.threads.messages.list(thread.id);
+          const lastMessage = messages.data[0];
+          if (lastMessage.role === 'assistant' && lastMessage.content[0].type === 'text') {
+            controller.enqueue(lastMessage.content[0].text.value);
+          }
+          controller.close();
+          break;
+        } else if (runStatus.status === 'failed') {
+          controller.error('Assistant run failed');
+          break;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
   });
 
-  return {
-    messages: [
-      ...history,
-      {
-        role: 'assistant' as const,
-        content:
-          text || toolResults.map(toolResult => toolResult.result).join(),
-        display: stream.value,
-      },
-    ],
-  };
+  const streamableValue = createStreamableValue(stream);
+  return streamableValue.value;
 }
 
 // Utils

@@ -8,38 +8,17 @@ import { readStreamableValue } from 'ai/rsc';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { IconArrowUp } from '@/components/ui/icons';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar } from "@/components/ui/avatar";
-import { AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-
+import Link from "next/link";
 export const maxDuration = 30;
 
 export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState<string>('');
-  const [activeTab, setActiveTab] = useState('general');
-
-  const quickPrompts = {
-    general: [
-      { label: "Highlight Important Info", prompt: "Highlight important information from the discussion" },
-      { label: "Key Takeaways", prompt: "What are the key takeaways from this meeting?" },
-      { label: "Action Items", prompt: "List all action items mentioned" }
-    ],
-    product: [
-      { label: "Product Details", prompt: "What's the best information on the products discussed in the meeting?" },
-      { label: "Feature Analysis", prompt: "Analyze the key features discussed" },
-      { label: "Product Roadmap", prompt: "Summarize the product roadmap points" }
-    ],
-    market: [
-      { label: "Market Trends", prompt: "What are the current market trends?" },
-      { label: "Competition", prompt: "Analyze competitive landscape discussed" },
-      { label: "Market Strategy", prompt: "Summarize market strategy points" }
-    ]
-  };
+  const [input, setInput] = useState<string>('');  
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setIsLoading(true);
     const newMessage: Message = {
       id: crypto.randomUUID(),
       content: input,
@@ -48,110 +27,102 @@ export default function Chat() {
     const newMessages = [...messages, newMessage];
     setMessages(newMessages);
     setInput('');
-    const result = await continueTextConversation(newMessages);
-    for await (const content of readStreamableValue(result)) {
-      setMessages([
-        ...newMessages,
-        {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: content as string,
-        },
-      ]);
+    try {
+      const result = await continueTextConversation(newMessages);
+      for await (const content of readStreamableValue(result)) {
+        setMessages([
+          ...newMessages,
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: content as string,
+          },
+        ]);
+      }
+    } finally {
+      setIsLoading(false);
     }
   }
   
   return (    
-    <div className="flex flex-col h-full max-w-5xl mx-auto px-4">
-      <Card className="flex-1 mt-4 mb-32 p-4 bg-white/50 backdrop-blur-sm border-none shadow-lg">
-        <Tabs defaultValue="general" className="h-full" onValueChange={setActiveTab}>
-          <div className="flex justify-between items-center mb-4">
-            <TabsList className="grid w-[400px] grid-cols-3">
-              <TabsTrigger value="general">General</TabsTrigger>
-              <TabsTrigger value="product">Product</TabsTrigger>
-              <TabsTrigger value="market">Market</TabsTrigger>
-            </TabsList>
-          </div>
-
-          <ScrollArea className="h-[calc(100vh-300px)] pr-4">
-            {messages.length <= 0 ? ( 
-              <div className="flex flex-col items-center justify-center h-full text-center space-y-4">
-                <Avatar className="h-20 w-20">
-                  <AvatarImage src="/hbk-logo.png" />
-                  <AvatarFallback>HBK</AvatarFallback>
-                </Avatar>
-                <div className="space-y-2">
-                  <h2 className="text-2xl font-bold">Welcome to HBK PM Bot</h2>
-                  <p className="text-muted-foreground">How can I help you today?</p>
+    <div className="group w-full overflow-auto ">
+      {messages.length <= 0 ? ( 
+        <div className="max-w-xl mx-auto mt-10 mb-24">
+          <p>Hello, I'm the HBK PM Bot. How can I help you today?</p>
+        </div>
+      ) 
+      : (
+        <div className="max-w-xl mx-auto mt-10 mb-24">
+          {messages.map((message, index) => (
+            <div key={message.id} className="whitespace-pre-wrap flex mb-5">
+              <div className={`${message.role === 'user' ? 'bg-slate-200 ml-auto' : 'bg-transparent'} p-2 rounded-lg`}>
+                {message.content}
+              </div>
+            </div>
+          ))}
+          {isLoading && (
+            <div className="flex justify-start mb-5">
+              <div className="bg-transparent p-2 rounded-lg">
+                <div className="flex flex-col space-y-2">
+                  <div className="flex space-x-2">
+                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                    <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                  </div>
+                  <span className="text-sm text-gray-500">Retrieving information from knowledge base...</span>
                 </div>
               </div>
-            ) : (
-              <div className="space-y-4">
-                {messages.map((message) => (
-                  <div key={message.id} 
-                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`flex items-start gap-2 max-w-[80%] ${
-                      message.role === 'user' 
-                        ? 'flex-row-reverse' 
-                        : 'flex-row'
-                    }`}>
-                      <Avatar className="h-8 w-8">
-                        {message.role === 'assistant' ? (
-                          <>
-                            <AvatarImage src="/hbk-logo.png" />
-                            <AvatarFallback>HBK</AvatarFallback>
-                          </>
-                        ) : (
-                          <AvatarFallback>You</AvatarFallback>
-                        )}
-                      </Avatar>
-                      <div className={`rounded-lg p-3 ${
-                        message.role === 'user' 
-                          ? 'bg-primary text-primary-foreground' 
-                          : 'bg-muted'
-                      }`}>
-                        {message.content}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </ScrollArea>
-        </Tabs>
-      </Card>
-
-      <div className="fixed inset-x-0 bottom-20 w-full">
-        <div className="max-w-5xl mx-auto px-4">
-          <div className="grid grid-cols-3 gap-2">
-            {quickPrompts[activeTab as keyof typeof quickPrompts].map((item, index) => (
-              <Button 
-                key={index}
-                variant="secondary" 
-                size="sm"
-                onClick={() => setInput(item.prompt)}
-                className="w-full"
-              >
-                {item.label}
-              </Button>
-            ))}
+            </div>
+          )}
+        </div>
+      )}
+      <div className="fixed inset-x-0 bottom-32 w-full">
+        <div className="w-full max-w-xl mx-auto px-4">
+          <div className="flex flex-wrap gap-2 justify-center">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setInput("What are the current market trends?")}
+              disabled={isLoading}
+            >
+              Market Trends
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setInput("Highlight important information")}
+              disabled={isLoading}
+            >
+              Highlight important information
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setInput("What's the best information on the products discussed in the meeting?")}
+              disabled={isLoading}
+            >
+              Product Information
+            </Button>
+           
           </div>
         </div>
       </div>
-
-      <div className="fixed inset-x-0 bottom-4 w-full">
-        <div className="max-w-5xl mx-auto px-4">
-          <Card className="p-2 border-none shadow-lg bg-white/50 backdrop-blur-sm">
+      <div className="fixed inset-x-0 bottom-10 w-full ">
+        <div className="w-full max-w-xl mx-auto">
+          <Card className="p-2">
             <form onSubmit={handleSubmit}>
-              <div className="flex gap-2">
+              <div className="flex">
                 <Input
                   type="text"
                   value={input}
-                  onChange={event => setInput(event.target.value)}
-                  placeholder="Ask me anything..."
-                  className="flex-1 border-none focus-visible:ring-1"
+                  onChange={event => {
+                    setInput(event.target.value);
+                  }}
+                  className="w-[95%] mr-2 border-0 ring-offset-0 focus-visible:ring-0 focus-visible:outline-none focus:outline-none focus:ring-0 ring-0 focus-visible:border-none border-transparent focus:border-transparent focus-visible:ring-none"
+                  placeholder='Ask me anything...'
+                  disabled={isLoading}
                 />
-                <Button type="submit" size="icon" disabled={!input.trim()}>
+                <Button disabled={!input.trim() || isLoading}>
                   <IconArrowUp />
                 </Button>
               </div>

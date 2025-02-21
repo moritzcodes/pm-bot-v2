@@ -1,37 +1,94 @@
+# PM Bot v2
 
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app) and designed to be fun and easy to get your hands dirty with the AI SDK.
+A Next.js application for managing meeting transcriptions, extracting summaries, and providing AI-powered insights.
+
+## Features
+
+- Upload and process meeting transcriptions
+- Automatic summary extraction with product mention detection
+- RAG-powered verification and enrichment
+- Chat interface for querying market trends
+- Reference-based responses with meeting context
+
+## Tech Stack
+
+- **Frontend:** Next.js, TailwindCSS
+- **Backend:** Next.js API Routes
+- **Database:** PostgreSQL with Prisma ORM
+- **Storage:** Vercel Blob Storage
+- **AI:** O3 Mini (primary) / DeepSeek (fallback)
 
 ## Getting Started
 
-First, run the development server:
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/pm-bot-v2.git
+   cd pm-bot-v2
+   ```
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Set up environment variables**
+   - Copy `.env.example` to `.env`
+   - Update the variables with your values:
+     - `DATABASE_URL`: PostgreSQL connection string
+     - `BLOB_READ_WRITE_TOKEN`: Vercel Blob storage token
+     - `JWT_SECRET`: Secret for JWT authentication
+     - AI model settings (if using different models)
+
+4. **Set up the database**
+   ```bash
+   # Create and apply migrations
+   npx prisma migrate dev
+   
+   # Generate Prisma Client
+   npx prisma generate
+   ```
+
+5. **Run the development server**
+   ```bash
+   npm run dev
+   ```
+
+6. Open [http://localhost:3000](http://localhost:3000) in your browser
+
+## Project Structure
+
+```
+pm-bot-v2/
+├── src/
+│   ├── app/              # Next.js app router
+│   ├── components/       # React components
+│   ├── lib/             # Utility functions
+│   └── project-plan/    # Project documentation
+├── prisma/              # Database schema and migrations
+├── public/             # Static assets
+└── .env               # Environment variables
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## API Documentation
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+See [src/api.md](src/api.md) for detailed API documentation.
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+## Database Schema
 
-## Learn More
+See [src/schema.md](src/schema.md) for database schema documentation.
 
-To learn more about Next.js, take a look at the following resources:
+## Project Plan
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+See [src/project-plan/overview.md](src/project-plan/overview.md) for the detailed project plan.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+## Contributing
 
-## Deploy on Vercel
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## License
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

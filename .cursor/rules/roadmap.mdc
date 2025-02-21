@@ -1,0 +1,141 @@
+---
+description: Rodmap for MVP
+globs: 
+---
+# MVP Development Roadmap – Transcriptions, Summaries & Company Knowledge Chat
+
+## Requirements & Dependencies
+- **Documents:** PRD.md, SRS.md, API.md, Schema.md, project-plan/
+- **Tech Stack:** Next.js on Vercel, serverless API routes, file uploads  
+- **Agents:** O3 Mini (preferred) / DeepSeek for RAG integration  
+- **Key Features:**
+  - Upload meeting transcriptions
+  - Extract meeting summaries with product name filter detection
+  - Setup RAG for company-specific info and summary verification
+  - Multi-agent system for tasks (general chat, customer/marketing trends)
+  - Option to archive casual transcriptions without knowledge-base update
+  - Retrieve enriched summaries with meeting references
+
+## Phase 1: Requirements & Architecture Setup
+- **Goals & Constraints:**
+  - Build an MVP that lets users upload transcripts and automatically extract & verify summaries.
+  - Enable a chat interface querying market trends via enriched data.
+- **Architecture Setup:**
+  - Define overall data flow and assign roles to each microservice/API endpoint.
+  - Decide on file storage vs. database records for transcriptions, summaries, and verification results.
+  - Outline integration points for the RAG model (O3 Mini / DeepSeek).
+
+## Phase 2: Iterative Feature Development
+
+### Feature 1: Upload Transcriptions
+1. **Technical Spike:**  
+   - Prototype a simple file upload using Next.js API routes.
+2. **Data Model Design:**  
+   - Create a `Transcriptions` table or file storage system with fields for ID, file metadata, and timestamp.
+3. **API and Backend:**  
+   - Implement an API endpoint for secure file uploads.
+4. **Frontend Implementation:**  
+   - Develop a UI component (drag-drop/file select) for uploading transcriptions.
+5. **Refine User Experience:**  
+   - Add loading indicators, error handling, and immediate file validation.
+
+### Feature 2: Meeting Summary Extraction & Filtering
+1. **Technical Spike:**  
+   - Build a prototype to extract summaries from uploaded text.
+2. **Data Model Design:**  
+   - Create a `Summaries` table:
+     - Columns: summary text, transcription ID (FK), verification status, reference meeting info.
+3. **API and Backend:**  
+   - Create an endpoint that:
+     - Processes transcript text.
+     - Filters for product names.
+     - Determines if the content is a casual transcription or a meeting summary.
+4. **Frontend Implementation:**  
+   - Display extracted summary with options:
+     - Confirm and add to the knowledge base.
+     - Save as a file if transcription is only casual.
+5. **Refine User Experience:**  
+   - Allow manual adjustments/verification edits on the summary.
+
+### Feature 3: Company Knowledge (RAG) Setup & Summary Verification
+1. **Technical Spike:**  
+   - Prototype integration with RAG using O3 Mini / DeepSeek.
+2. **Data Model Design:**  
+   - Extend the `Summaries` model with fields for:
+     - Verification flag
+     - Additional info provided by RAG
+     - Meeting reference IDs
+3. **API and Backend:**  
+   - Implement endpoints to:
+     - Send summaries to the RAG model.
+     - Receive verified/enriched summaries with references.
+4. **Frontend Implementation:**  
+   - Create UI to display verified summaries vs. archived files.
+   - Provide options for users to opt in for enriched retrieval (summaries alone or full transcription + summary).
+5. **Refine User Experience:**  
+   - Clearly indicate which summaries are verified and include meeting references.
+
+### Feature 4: General Chat Interface for Market Trends
+1. **Technical Spike:**  
+   - Build a quick prototype using an existing chat component.
+2. **Data Model Design:**  
+   - Use the `Summaries` table as the primary knowledge base for retrieval.
+   - Optionally capture user queries.
+3. **API and Backend:**  
+   - Develop an endpoint that:
+     - Aggregates relevant summaries from the knowledge base.
+     - Interacts with the chosen RAG agent to answer chat queries about market trends.
+4. **Frontend Implementation:**  
+   - Develop a chat UI that:
+     - Provides toggle options (e.g., summaries-only vs. full text).
+     - Displays meeting references from the retrieved info.
+5. **Refine User Experience:**  
+   - Ensure the interface is intuitive and differentiates between customer and marketing trends.
+
+## Cross-Cutting Concerns
+- **Deployment:**  
+  - Vercel integration using Next.js best practices (configure next.config.mjs, vercel.json).
+- **Security:**  
+  - Validate file uploads, protect API endpoints.
+- **Testing & Monitoring:**  
+  - Write unit/integration tests for API endpoints and UI components.
+  - Enable logging and monitoring for error handling.
+- **Documentation:**  
+  - Update Schema.md and API.md with new endpoints and data models.
+  - Maintain clear commit messages and incremental documentation.
+
+## Cursor Rules (Project Transition Guidelines)
+- **Feature Completion Checkpoints:**  
+  - Only transition to frontend integration when the backend endpoint is functional.
+  - Validate that file uploads and summary extractions work end-to-end before moving to verification.
+- **Agent Selection:**  
+  - Prototype both O3 Mini and DeepSeek integrations; default to O3 Mini if it has lower hallucination.
+- **Data Flow Isolation:**  
+  - Implement guard conditions so that casual transcriptions are archived and not auto-inserted into the knowledge base.
+- **Incremental Commit Strategy:**  
+  - Commit each feature as an MVP iteration.  
+  - Ensure commit checkpoints include updates to Schema.md, API.md, and documentation.
+- **Fallback Handling:**  
+  - When a summary does not require full integration, provide a UI toggle to save as a file.
+- **User Experience:**  
+  - Always include clear options in the UI so the single developer can easily test each path.
+- **Testing & Review:**  
+  - After each implementation step, test the new functionality in isolation, then integrate with others.
+  
+## Milestone Timeline (for a Single Developer)
+- **Week 1:**  
+  - Requirements gathering & architecture design.
+  - Set up initial project skeleton and deployment on Vercel.
+- **Week 2:**  
+  - Implement Upload Transcriptions feature.
+  - Develop API endpoint & frontend upload component.
+- **Week 3–4:**  
+  - Build Meeting Summary Extraction & Filtering features.
+  - Implement data models and testing prototypes for product name detection.
+- **Week 5:**  
+  - RAG integration & Summary Verification; choose and test the agent (O3 Mini vs. DeepSeek).
+- **Week 6:**  
+  - Develop Chat Interface for Market Trends Queries.
+  - Integrate with knowledge base and display meeting references.
+- **Week 7:**  
+  - End-to-end testing, documentation updates, polish UX, deploy final MVP to Vercel.

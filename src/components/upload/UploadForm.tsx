@@ -38,7 +38,7 @@ export function UploadForm() {
   }, []);
 
   const isValidFileType = (file: File) => {
-    const validTypes = ['audio/mp3', 'video/mp4', 'text/plain'];
+    const validTypes = ['audio/mp3', 'audio/mpeg', 'video/mp4', 'text/plain'];
     return validTypes.includes(file.type);
   };
 
@@ -64,7 +64,7 @@ export function UploadForm() {
       setTranscriptionId(id);
 
       // If it's an audio/video file, transcribe it
-      if (file.type !== 'text/plain') {
+      if (file.type === 'audio/mp3' || file.type === 'audio/mpeg' || file.type === 'video/mp4') {
         setStatus('transcribing');
         const transcribeResponse = await fetch(`/api/transcriptions/${id}/transcribe`, {
           method: 'POST',
@@ -74,10 +74,22 @@ export function UploadForm() {
         const { transcription } = await transcribeResponse.json();
         setTranscription(transcription);
         setStatus('editing');
-      } else {
+      } else if (file.type === 'text/plain') {
         // For text files, read content directly
         const text = await file.text();
         setTranscription(text);
+        
+        // Save the text content directly
+        const saveResponse = await fetch('/api/transcriptions/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            transcription: text,
+            id: id,
+          }),
+        });
+        
+        if (!saveResponse.ok) throw new Error('Failed to save text content');
         setStatus('editing');
       }
     } catch (err) {
@@ -171,8 +183,13 @@ export function UploadForm() {
         {(status === 'uploading' || status === 'transcribing') && (
           <div className="mt-4">
             <p className="text-sm text-muted-foreground">
-              {status === 'uploading' ? 'Uploading...' : 'Transcribing...'}
+              {status === 'uploading' ? 'Uploading...' : 'Transcribing with Whisper...'}
             </p>
+            {status === 'transcribing' && (
+              <p className="text-xs text-muted-foreground mt-1">
+                This may take a few minutes for longer audio/video files
+              </p>
+            )}
           </div>
         )}
 

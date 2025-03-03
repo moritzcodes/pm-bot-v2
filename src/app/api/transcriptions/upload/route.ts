@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     const transcription = await prisma.transcription.create({
       data: {
         filename: file.name,
-        content: '', // Will be populated after transcription
+        content: blob.url, // Store the URL to the file
         fileSize: file.size,
         mimeType: file.type,
         status: 'pending',

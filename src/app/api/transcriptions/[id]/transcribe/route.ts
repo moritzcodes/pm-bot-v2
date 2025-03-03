@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import OpenAI from 'openai';
 
-const prisma = new PrismaClient();
-const openai = new OpenAI();
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Get transcription from database
     const transcription = await prisma.transcription.findUnique({
       where: { id: params.id },
     });
@@ -19,6 +19,14 @@ export async function POST(
       return NextResponse.json(
         { error: 'Transcription not found' },
         { status: 404 }
+      );
+    }
+
+    // Only transcribe if content is a URL (audio/video files)
+    if (!transcription.content.startsWith('http')) {
+      return NextResponse.json(
+        { error: 'Transcription already processed' },
+        { status: 400 }
       );
     }
 
@@ -31,18 +39,13 @@ export async function POST(
       type: transcription.mimeType,
     });
 
-    // Create a FormData instance
-    const formData = new FormData();
-    formData.append('file', audioFile);
-    formData.append('model', 'whisper-1');
-
     // Transcribe using OpenAI's Whisper
     const result = await openai.audio.transcriptions.create({
       file: audioFile,
       model: 'whisper-1',
     });
 
-    // Update transcription in database
+    // Update transcription in database with actual text content
     const updatedTranscription = await prisma.transcription.update({
       where: { id: params.id },
       data: {
@@ -52,7 +55,9 @@ export async function POST(
     });
 
     return NextResponse.json({
+      id: updatedTranscription.id,
       transcription: result.text,
+      status: 'processed'
     });
   } catch (error) {
     console.error('Transcription error:', error);

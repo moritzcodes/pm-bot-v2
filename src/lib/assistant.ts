@@ -207,6 +207,7 @@ export async function addTranscriptionToAssistant(transcriptionId: string): Prom
     await updateEnrichedDataDB('transcription', transcriptionId, enrichedData);
 
     return {
+      success: true,
       fileId,
       vectorStoreId
     };
@@ -219,7 +220,7 @@ export async function addTranscriptionToAssistant(transcriptionId: string): Prom
 /**
  * Add a summary to the OpenAI Assistant's knowledge
  */
-export async function addSummaryToAssistant(summaryId: string) {
+export async function addSummaryToAssistant(summaryId: string): Promise<{ fileId: string; vectorStoreId: string; success: boolean }> {
   if (!ASSISTANT_ID) {
     throw new Error('ASSISTANT_ID is not defined in environment variables');
   }
@@ -260,6 +261,7 @@ export async function addSummaryToAssistant(summaryId: string) {
     await updateEnrichedDataDB('summary', summaryId, enrichedData);
 
     return {
+      success: true,
       fileId,
       vectorStoreId
     };

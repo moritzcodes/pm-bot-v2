@@ -128,7 +128,7 @@ export function TranscriptionDetails({ transcription }: TranscriptionDetailsProp
         }
       }
     } catch (error) {
-      setError(error.message);
+      setError(error instanceof Error ? error.message : 'Failed to generate summary');
       console.error('Error generating summary:', error);
     } finally {
       setIsGenerating(false);

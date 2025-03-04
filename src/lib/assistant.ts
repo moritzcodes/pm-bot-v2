@@ -54,12 +54,18 @@ async function addFileToAssistant(fileId: string) {
       throw new Error('ASSISTANT_ID is not defined');
     }
     
-    // Using the assistants.files.create method from OpenAI SDK
-    await openai.beta.assistants.files.create(
-      ASSISTANT_ID as string,
+    // First get the current file IDs
+    const assistant = await openai.beta.assistants.retrieve(ASSISTANT_ID);
+    
+    // Create a list of all file IDs including the new one
+    const fileIds = [...((assistant as any).file_ids || []), fileId];
+    
+    // Update the assistant with all file IDs
+    await openai.beta.assistants.update(
+      ASSISTANT_ID,
       {
-        file_id: fileId
-      }
+        file_ids: fileIds
+      } as any
     );
     
     return true;
@@ -201,7 +207,7 @@ export async function addTranscriptionToAssistant(transcriptionId: string): Prom
     fs.unlinkSync(tempFilePath);
 
     // Update the enrichedData field in the database to include the file ID
-    const enrichedData = transcription.enrichedData || {};
+    const enrichedData = (transcription.enrichedData || {}) as Record<string, any>;
     enrichedData.openaiFileId = fileId;
     enrichedData.vectorStoreId = vectorStoreId;
     await updateEnrichedDataDB('transcription', transcriptionId, enrichedData);
@@ -255,7 +261,7 @@ export async function addSummaryToAssistant(summaryId: string): Promise<{ fileId
     fs.unlinkSync(tempFilePath);
 
     // Update the enrichedData field in the database to include the file ID
-    const enrichedData = summary.enrichedData || {};
+    const enrichedData = (summary.enrichedData || {}) as Record<string, any>;
     enrichedData.openaiFileId = fileId;
     enrichedData.vectorStoreId = vectorStoreId;
     await updateEnrichedDataDB('summary', summaryId, enrichedData);

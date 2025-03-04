@@ -166,7 +166,7 @@ async function uploadFileToOpenAI(filePath: string, fileType: string) {
 /**
  * Add a transcription to the OpenAI Assistant's knowledge
  */
-export async function addTranscriptionToAssistant(transcriptionId: string) {
+export async function addTranscriptionToAssistant(transcriptionId: string): Promise<{ fileId: string; vectorStoreId: string; success: boolean }> {
   if (!ASSISTANT_ID) {
     throw new Error('ASSISTANT_ID is not defined in environment variables');
   }

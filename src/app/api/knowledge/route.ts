@@ -5,6 +5,7 @@ import { addTranscriptionToAssistant, addSummaryToAssistant } from '@/lib/assist
 type AssistantResult = {
   success: boolean;
   fileId?: string;
+  vectorStoreId?: string;
   error?: unknown;
 } | null;
 
@@ -34,12 +35,22 @@ export async function POST(request: Request) {
     
     // Add transcription to assistant if ID provided
     if (transcriptionId) {
-      results.transcription = await addTranscriptionToAssistant(transcriptionId);
+      const transcriptionResult = await addTranscriptionToAssistant(transcriptionId);
+      results.transcription = {
+        success: true,
+        fileId: transcriptionResult.fileId,
+        vectorStoreId: transcriptionResult.vectorStoreId
+      };
     }
     
     // Add summary to assistant if ID provided
     if (summaryId) {
-      results.summary = await addSummaryToAssistant(summaryId);
+      const summaryResult = await addSummaryToAssistant(summaryId);
+      results.summary = {
+        success: true,
+        fileId: summaryResult.fileId,
+        vectorStoreId: summaryResult.vectorStoreId
+      };
     }
     
     return NextResponse.json({
@@ -80,11 +91,13 @@ interface SummaryWithEnrichedData {
  */
 export async function GET() {
   try {
-    // Find all transcriptions with assistantFileId in enrichedData
+    // Find all transcriptions with non-null enrichedData
     const transcriptions = await prisma.transcription.findMany({
       where: {
-        NOT: {
-          enrichedData: null
+        enrichedData: {
+          not: {
+            equals: null
+          }
         }
       },
       select: {
@@ -96,11 +109,13 @@ export async function GET() {
       }
     });
     
-    // Find all summaries with assistantFileId in enrichedData
+    // Find all summaries with non-null enrichedData
     const summaries = await prisma.summary.findMany({
       where: {
-        NOT: {
-          enrichedData: null
+        enrichedData: {
+          not: {
+            equals: null
+          }
         }
       },
       select: {

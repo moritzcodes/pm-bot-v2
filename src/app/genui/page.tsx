@@ -1,8 +1,7 @@
-// import Chat from "@/components/chat";
 'use client';
 
 import { useState } from 'react';
-import { continueConversation, Message } from '@/app/actions';
+import { continueTextConversation, Message } from '@/app/actions';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -14,13 +13,24 @@ export default function GenUI() {
   const [conversation, setConversation] = useState<Message[]>([]);
   const [input, setInput] = useState<string>('');
   const handleSubmit = async () => {
-    const { messages } = await continueConversation([
+    const result = await continueTextConversation([
       // exclude React components from being sent back to the server:
-      ...conversation.map(({ role, content }) => ({ role, content })),
-      { role: 'user', content: input },
+      ...conversation.map(({ role, content, id }) => ({ role, content, id })),
+      { role: 'user', content: input, id: crypto.randomUUID() },
     ]);
-    setInput("")
-    setConversation(messages);
+    setInput("");
+      setConversation(messages => [...messages, 
+      { 
+        id: crypto.randomUUID(),
+        role: 'user', 
+        content: input 
+      },
+      { 
+        id: crypto.randomUUID(),
+        role: 'assistant', 
+        content: result 
+      }
+    ]);
   } 
   const handleKeyDown = (e: { key: string; }) => {
     if (e.key === 'Enter') {

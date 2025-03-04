@@ -98,7 +98,7 @@ export default function Chat() {
             <Button 
               variant="outline" 
               size="sm"
-              onClick={() => setInput("What's the best information on the products discussed in the meeting?")}
+              onClick={() => setInput("What&apos;s the best information on the products discussed in the meeting?")}
               disabled={isLoading}
             >
               Product Information

@@ -13,6 +13,7 @@ export async function POST(
   try {
     const transcription = await prisma.transcription.findUnique({
       where: { id: params.id },
+      include: { productTerms: true },
     });
 
     if (!transcription) {

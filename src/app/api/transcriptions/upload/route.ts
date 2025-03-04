@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { put } from '@vercel/blob';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 export async function POST(request: Request) {
   try {
@@ -16,8 +14,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Upload file to Vercel Blob
-    const blob = await put(file.name, file, {
+    // Check file size
+    if (file.size > 100 * 1024 * 1024) { // 100MB limit
+      return NextResponse.json(
+        { error: 'File size exceeds 100MB limit' },
+        { status: 400 }
+      );
+    }
+
+    // Upload to blob storage
+    const { url } = await put(file.name, file, {
       access: 'public',
     });
 
@@ -25,7 +31,7 @@ export async function POST(request: Request) {
     const transcription = await prisma.transcription.create({
       data: {
         filename: file.name,
-        content: blob.url, // Store the URL to the file
+        content: url,
         fileSize: file.size,
         mimeType: file.type,
         status: 'pending',
@@ -34,12 +40,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       id: transcription.id,
-      url: blob.url,
+      url: url,
     });
   } catch (error) {
-    console.error('Upload error:', error);
+    console.error('Error in transcription upload:', error);
     return NextResponse.json(
-      { error: 'Failed to upload file' },
+      { error: 'Failed to process upload' },
       { status: 500 }
     );
   }

@@ -33,55 +33,44 @@ export function UploadForm() {
     e.preventDefault();
     if (!file) return;
 
+    setStatus('uploading');
+    setError(null);
+
     try {
-      setStatus('uploading');
-      
-      // Create form data
+      // 1. Upload the file to get a URL
       const formData = new FormData();
       formData.append('file', file);
 
-      // Upload file
       const uploadResponse = await fetch('/api/transcriptions/upload', {
         method: 'POST',
         body: formData,
       });
 
-      if (!uploadResponse.ok) throw new Error('Upload failed');
-      const { id } = await uploadResponse.json();
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload file');
+      }
+
+      const { id, url } = await uploadResponse.json();
       setTranscriptionId(id);
 
-      // If it's an audio/video file, transcribe it
-      if (file.type === 'audio/mp3' || file.type === 'audio/mpeg' || file.type === 'video/mp4') {
-        setStatus('transcribing');
-        const transcribeResponse = await fetch(`/api/transcriptions/${id}/transcribe`, {
-          method: 'POST',
-        });
-        
-        if (!transcribeResponse.ok) throw new Error('Transcription failed');
-        const { transcription } = await transcribeResponse.json();
-        setTranscription(transcription);
-        setStatus('editing');
-      } else if (file.type === 'text/plain') {
-        // For text files, read content directly
-        const text = await file.text();
-        setTranscription(text);
-        
-        // Save the text content directly
-        const saveResponse = await fetch('/api/transcriptions/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            transcription: text,
-            id: id,
-          }),
-        });
-        
-        if (!saveResponse.ok) throw new Error('Failed to save text content');
-        setStatus('editing');
+      // 2. Start transcription process
+      setStatus('transcribing');
+      const transcribeResponse = await fetch(`/api/transcriptions/${id}/transcribe`, {
+        method: 'POST',
+      });
+
+      if (!transcribeResponse.ok) {
+        throw new Error('Failed to transcribe audio');
       }
+
+      const transcribeData = await transcribeResponse.json();
+
+      // Set transcription for editing
+      setTranscription(transcribeData.transcription || transcribeData.content);
+      setStatus('editing');
     } catch (err) {
-      console.error(err);
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Error:', err);
+      setError(err instanceof Error ? err.message : 'Something went wrong');
       setStatus('error');
     }
   };
@@ -102,7 +91,11 @@ export function UploadForm() {
       if (!response.ok) throw new Error('Failed to save transcription');
       
       setStatus('success');
-      router.push('/transcriptions'); // Redirect to transcriptions list
+      
+      // Redirect to the transcription details page
+      setTimeout(() => {
+        router.push(`/transcriptions/${transcriptionId}`);
+      }, 1500);
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : 'Failed to save transcription');
@@ -112,40 +105,42 @@ export function UploadForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
       <Card className="p-6">
-        <div
-          onDrop={handleDrop}
-          onDragOver={(e) => e.preventDefault()}
-          className="border-2 border-dashed rounded-lg p-10 text-center hover:border-primary cursor-pointer"
-        >
-          <input
-            type="file"
-            onChange={handleFileChange}
-            accept=".mp3,.mp4,.txt"
-            className="hidden"
-            id="file-upload"
-          />
-          <Label htmlFor="file-upload" className="cursor-pointer">
-            {file ? (
-              <p className="text-sm">Selected file: {file.name}</p>
-            ) : (
-              <div>
-                <p className="text-lg font-medium">Drag and drop your file here</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  or click to select a file (MP3, MP4, or text)
-                </p>
-              </div>
-            )}
-          </Label>
+        <h2 className="text-xl font-bold mb-4">Upload Media</h2>
+        {error && <p className="text-red-500 mb-4">{error}</p>}
+
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="file" className="block text-sm font-medium mb-2">
+              Select audio or video file
+            </label>
+            <input
+              id="file"
+              type="file"
+              onChange={(e) => {
+                const selectedFile = e.target.files?.[0] || null;
+                if (selectedFile && isValidFileType(selectedFile)) {
+                  setFile(selectedFile);
+                  setStatus('idle');
+                } else if (selectedFile) {
+                  setError('Invalid file type. Please upload an audio or video file.');
+                }
+              }}
+              accept="audio/*,video/*"
+              className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
+            />
+          </div>
+          
+          <p className="text-sm text-muted-foreground">
+            Note: All product terms will be automatically included to improve transcription accuracy.
+          </p>
         </div>
 
-        {error && (
-          <p className="text-sm text-destructive mt-2">{error}</p>
-        )}
-
         {status === 'editing' && (
-          <div className="mt-6">
-            <Label htmlFor="transcription">Edit Transcription</Label>
-            <textarea
+          <div className="mt-4">
+            <label htmlFor="transcription" className="block text-sm font-medium">
+              Review and edit transcription
+            </label>
+            <Textarea
               id="transcription"
               value={transcription}
               onChange={(e) => setTranscription(e.target.value)}
@@ -182,7 +177,7 @@ export function UploadForm() {
 
         {status === 'success' && (
           <p className="text-sm text-green-600 mt-4">
-            Transcription saved successfully!
+            Transcription saved successfully! Redirecting...
           </p>
         )}
       </Card>

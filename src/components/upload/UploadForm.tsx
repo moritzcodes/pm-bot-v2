@@ -1,10 +1,18 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Textarea } from '@/components/ui/textarea';
+
+interface ProductTerm {
+  id: string;
+  term: string;
+  description: string | null;
+  category: string | null;
+}
 
 type UploadStatus = 'idle' | 'uploading' | 'transcribing' | 'editing' | 'success' | 'error';
 
@@ -12,33 +20,12 @@ export function UploadForm() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<UploadStatus>('idle');
-  const [error, setError] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+  const [transcriptionId, setTranscriptionId] = useState<string | null>(null);
   const [transcription, setTranscription] = useState<string>('');
-  const [transcriptionId, setTranscriptionId] = useState<string>('');
-
-  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const droppedFile = e.dataTransfer.files[0];
-    if (isValidFileType(droppedFile)) {
-      setFile(droppedFile);
-      setError('');
-    } else {
-      setError('Invalid file type. Please upload an MP3, MP4, or text file.');
-    }
-  }, []);
-
-  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile && isValidFileType(selectedFile)) {
-      setFile(selectedFile);
-      setError('');
-    } else {
-      setError('Invalid file type. Please upload an MP3, MP4, or text file.');
-    }
-  }, []);
 
   const isValidFileType = (file: File) => {
-    const validTypes = ['audio/mp3', 'audio/mpeg', 'video/mp4', 'text/plain'];
+    const validTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'video/mp4', 'video/webm'];
     return validTypes.includes(file.type);
   };
 

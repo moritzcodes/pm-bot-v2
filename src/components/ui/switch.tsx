@@ -1,29 +1,66 @@
 "use client"
 
 import * as React from "react"
-import * as SwitchPrimitives from "@radix-ui/react-switch"
-
 import { cn } from "@/lib/utils"
 
-const Switch = React.forwardRef<
-  React.ElementRef<typeof SwitchPrimitives.Root>,
-  React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root>
->(({ className, ...props }, ref) => (
-  <SwitchPrimitives.Root
-    className={cn(
-      "peer inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input",
-      className
-    )}
-    {...props}
-    ref={ref}
-  >
-    <SwitchPrimitives.Thumb
-      className={cn(
-        "pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform data-[state=checked]:translate-x-5 data-[state=unchecked]:translate-x-0"
-      )}
-    />
-  </SwitchPrimitives.Root>
-))
-Switch.displayName = SwitchPrimitives.Root.displayName
+interface SwitchProps extends React.HTMLAttributes<HTMLDivElement> {
+  checked?: boolean;
+  defaultChecked?: boolean;
+  onCheckedChange?: (checked: boolean) => void;
+  disabled?: boolean;
+  id?: string;
+}
 
-export { Switch }
+export const Switch = React.forwardRef<HTMLDivElement, SwitchProps>(
+  ({ className, checked, defaultChecked = false, onCheckedChange, disabled, id, ...props }, ref) => {
+    const [isChecked, setIsChecked] = React.useState(defaultChecked);
+    
+    // Use checked prop if provided (controlled component)
+    const isControlled = checked !== undefined;
+    const currentChecked = isControlled ? checked : isChecked;
+    
+    const handleClick = () => {
+      if (disabled) return;
+      
+      if (!isControlled) {
+        setIsChecked(!currentChecked);
+      }
+      
+      onCheckedChange?.(!currentChecked);
+    };
+    
+    return (
+      <div
+        role="switch"
+        aria-checked={currentChecked}
+        aria-disabled={disabled}
+        id={id}
+        tabIndex={disabled ? -1 : 0}
+        onClick={handleClick}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            handleClick();
+          }
+        }}
+        className={cn(
+          'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors',
+          'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500',
+          currentChecked ? 'bg-blue-600' : 'bg-gray-200',
+          disabled && 'opacity-50 cursor-not-allowed',
+          className
+        )}
+        {...props}
+        ref={ref}
+      >
+        <span
+          className={cn(
+            'pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform',
+            currentChecked ? 'translate-x-5' : 'translate-x-0.5'
+          )}
+          aria-hidden="true"
+        />
+      </div>
+    );
+  }
+);

@@ -27,8 +27,8 @@ export async function POST(
 ) {
   try {
     const transcriptionId = params.id;
+    console.log('Processing summary request for:', transcriptionId);
     
-    // Find the transcription
     const transcription = await prisma.transcription.findUnique({
       where: { id: transcriptionId },
     });
@@ -40,10 +40,8 @@ export async function POST(
       );
     }
 
-    // Check if this is a save request (with summary data) or a generate request
     const body = await request.json();
     
-    // Case 1: Save provided summary data
     if (body.summaryData) {
       const { summaryData } = body;
       
@@ -85,14 +83,34 @@ export async function POST(
       }
     }
     
-    // Case 2: Generate a new summary
+    // Generate new summary
     const { format } = body;
     
-    return getStreamableResponse(async (streamCallback) => {
-      await generateSummary(transcription.content, {
-        format,
-        onToken: streamCallback,
-      });
+    const encoder = new TextEncoder();
+    const stream = new TransformStream();
+    const writer = stream.writable.getWriter();
+
+    // Start the summary generation in the background
+    generateSummary(transcription.content, {
+      format,
+      onToken: async (token) => {
+        await writer.write(encoder.encode(token));
+      },
+    }).catch(async (error) => {
+      console.error('Summary generation error:', error);
+      await writer.write(
+        encoder.encode(`data: ${JSON.stringify({ error: error.message })}\n\n`)
+      );
+    }).finally(async () => {
+      await writer.close();
+    });
+
+    return new Response(stream.readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
     });
   } catch (error) {
     console.error('Error in summary route:', error);

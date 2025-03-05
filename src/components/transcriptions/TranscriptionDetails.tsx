@@ -67,69 +67,60 @@ export function TranscriptionDetails({ transcription }: TranscriptionDetailsProp
     try {
       setIsGenerating(true);
       setError(null);
+      console.log('Starting summary generation for:', transcription.id);
 
       const response = await fetch(`/api/transcriptions/${transcription.id}/summary`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ draftMode: true }),
+        body: JSON.stringify({ format: 'formal' }),
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to generate summary');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate summary');
       }
 
-      // Handle the SSE stream
       const reader = response.body?.getReader();
       if (!reader) {
-        throw new Error('Failed to get stream reader');
+        throw new Error('No response stream available');
       }
 
-      let accumulatedText = '';
+      let summaryText = '';
       const decoder = new TextDecoder();
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        
-        const text = decoder.decode(value);
-        const lines = text.split('\n\n');
-        
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n').filter(Boolean);
+
         for (const line of lines) {
           if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            summaryText += data;
+            console.log('Received chunk:', data);
+
             try {
-              const jsonStr = line.substring(6); // Remove 'data: ' prefix
-              const data = JSON.parse(jsonStr);
+              const summaryData = JSON.parse(summaryText);
+              console.log('Parsed summary data:', summaryData);
               
-              if (data.token) {
-                accumulatedText += data.token;
-                // Optionally update UI with streaming tokens
-              } else if (data.done) {
-                // Stream is complete
-                try {
-                  const summaryData = JSON.parse(accumulatedText);
-                  // Initialize editable fields
-                  setDraftSummary(true);
-                  setEditedContent(summaryData.summary);
-                  setEditedMarketTrends(summaryData.marketTrends.join('\n'));
-                  setEditedProductMentions(summaryData.productMentions.join('\n'));
-                  setIsCasual(summaryData.isCasual);
-                } catch (e) {
-                  console.error('Error parsing summary JSON:', e);
-                  throw new Error('Generated summary is not valid JSON');
-                }
-              }
+              setEditedContent(summaryData.summary || '');
+              setEditedMarketTrends((summaryData.marketTrends || []).join('\n'));
+              setEditedProductMentions((summaryData.productMentions || []).join('\n'));
+              setIsCasual(!!summaryData.isCasual);
+              setDraftSummary(true); // Show the draft summary editor
             } catch (e) {
-              console.error('Error processing SSE data:', e, line);
+              // Incomplete JSON, continue accumulating
             }
           }
         }
       }
     } catch (error) {
+      console.error('Summary generation error:', error);
       setError(error instanceof Error ? error.message : 'Failed to generate summary');
-      console.error('Error generating summary:', error);
     } finally {
       setIsGenerating(false);
     }
@@ -311,7 +302,25 @@ export function TranscriptionDetails({ transcription }: TranscriptionDetailsProp
       {/* Draft Summary Editor */}
       {draftSummary && (
         <Card className="p-6">
-          <h3 className="text-lg font-medium mb-4">Edit Summary Before Saving</h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-medium">Generated Summary</h3>
+            <div className="space-x-2">
+              <Button 
+                variant="outline" 
+                onClick={handleDiscardDraft}
+                disabled={isSaving}
+              >
+                Discard
+              </Button>
+              <Button 
+                onClick={handleSaveSummary}
+                disabled={isSaving}
+              >
+                {isSaving ? 'Saving...' : 'Save Summary'}
+              </Button>
+            </div>
+          </div>
+
           <Tabs defaultValue="summary" className="w-full">
             <TabsList>
               <TabsTrigger value="summary">Summary</TabsTrigger>
@@ -324,7 +333,7 @@ export function TranscriptionDetails({ transcription }: TranscriptionDetailsProp
                 <label className="text-sm font-medium">Summary Content</label>
                 <Textarea 
                   value={editedContent}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setEditedContent(e.target.value)}
+                  onChange={(e) => setEditedContent(e.target.value)}
                   className="min-h-[200px]"
                   placeholder="Edit the summary content..."
                 />
@@ -336,40 +345,36 @@ export function TranscriptionDetails({ transcription }: TranscriptionDetailsProp
                 <label className="text-sm font-medium">Market Trends (one per line)</label>
                 <Textarea 
                   value={editedMarketTrends}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setEditedMarketTrends(e.target.value)}
-                  className="min-h-[200px]"
-                  placeholder="Edit market trends (one per line)..."
+                  onChange={(e) => setEditedMarketTrends(e.target.value)}
+                  className="min-h-[150px]"
+                  placeholder="Enter market trends, one per line..."
                 />
               </div>
             </TabsContent>
-            
+
             <TabsContent value="products" className="mt-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Product Mentions (one per line)</label>
                 <Textarea 
                   value={editedProductMentions}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setEditedProductMentions(e.target.value)}
-                  className="min-h-[200px]"
-                  placeholder="Edit product mentions (one per line)..."
+                  onChange={(e) => setEditedProductMentions(e.target.value)}
+                  className="min-h-[150px]"
+                  placeholder="Enter product mentions, one per line..."
                 />
               </div>
             </TabsContent>
           </Tabs>
-          
-          <div className="mt-6 flex space-x-2 justify-end">
-            <Button 
-              variant="outline" 
-              onClick={handleDiscardDraft}
-              disabled={isSaving}
-            >
-              Discard
-            </Button>
-            <Button 
-              onClick={handleSaveSummary}
-              disabled={isSaving}
-            >
-              {isSaving ? 'Saving...' : 'Save Summary'}
-            </Button>
+
+          <div className="mt-4">
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={isCasual}
+                onChange={(e) => setIsCasual(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              <span className="text-sm">This is a casual conversation</span>
+            </label>
           </div>
         </Card>
       )}

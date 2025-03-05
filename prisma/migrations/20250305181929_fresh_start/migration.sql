@@ -9,6 +9,7 @@ CREATE TABLE "Transcription" (
     "status" TEXT NOT NULL DEFAULT 'pending',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
+    "enrichedData" JSONB,
 
     CONSTRAINT "Transcription_pkey" PRIMARY KEY ("id")
 );
@@ -40,9 +41,31 @@ CREATE TABLE "ChatMessage" (
 );
 
 -- CreateTable
+CREATE TABLE "ProductTerm" (
+    "id" TEXT NOT NULL,
+    "term" TEXT NOT NULL,
+    "description" TEXT,
+    "category" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ProductTerm_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "_ChatMessageToSummary" (
     "A" TEXT NOT NULL,
-    "B" TEXT NOT NULL
+    "B" TEXT NOT NULL,
+
+    CONSTRAINT "_ChatMessageToSummary_AB_pkey" PRIMARY KEY ("A","B")
+);
+
+-- CreateTable
+CREATE TABLE "_TranscriptionToProductTerm" (
+    "A" TEXT NOT NULL,
+    "B" TEXT NOT NULL,
+
+    CONSTRAINT "_TranscriptionToProductTerm_AB_pkey" PRIMARY KEY ("A","B")
 );
 
 -- CreateIndex
@@ -58,10 +81,13 @@ CREATE INDEX "Summary_transcriptionId_idx" ON "Summary"("transcriptionId");
 CREATE INDEX "ChatMessage_timestamp_idx" ON "ChatMessage"("timestamp");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "_ChatMessageToSummary_AB_unique" ON "_ChatMessageToSummary"("A", "B");
+CREATE UNIQUE INDEX "ProductTerm_term_key" ON "ProductTerm"("term");
 
 -- CreateIndex
 CREATE INDEX "_ChatMessageToSummary_B_index" ON "_ChatMessageToSummary"("B");
+
+-- CreateIndex
+CREATE INDEX "_TranscriptionToProductTerm_B_index" ON "_TranscriptionToProductTerm"("B");
 
 -- AddForeignKey
 ALTER TABLE "Summary" ADD CONSTRAINT "Summary_transcriptionId_fkey" FOREIGN KEY ("transcriptionId") REFERENCES "Transcription"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -70,4 +96,10 @@ ALTER TABLE "Summary" ADD CONSTRAINT "Summary_transcriptionId_fkey" FOREIGN KEY 
 ALTER TABLE "_ChatMessageToSummary" ADD CONSTRAINT "_ChatMessageToSummary_A_fkey" FOREIGN KEY ("A") REFERENCES "ChatMessage"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "_ChatMessageToSummary" ADD CONSTRAINT "_ChatMessageToSummary_B_fkey" FOREIGN KEY ("B") REFERENCES "Summary"("id") ON DELETE CASCADE ON UPDATE CASCADE; 
+ALTER TABLE "_ChatMessageToSummary" ADD CONSTRAINT "_ChatMessageToSummary_B_fkey" FOREIGN KEY ("B") REFERENCES "Summary"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_TranscriptionToProductTerm" ADD CONSTRAINT "_TranscriptionToProductTerm_A_fkey" FOREIGN KEY ("A") REFERENCES "ProductTerm"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_TranscriptionToProductTerm" ADD CONSTRAINT "_TranscriptionToProductTerm_B_fkey" FOREIGN KEY ("B") REFERENCES "Transcription"("id") ON DELETE CASCADE ON UPDATE CASCADE;

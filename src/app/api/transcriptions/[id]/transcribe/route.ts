@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import OpenAI from 'openai';
+import { ElevenLabsClient } from 'elevenlabs';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+// Initialize Eleven Labs client
+const elevenlabs = new ElevenLabsClient({
+  apiKey: process.env.ELEVENLABS_API_KEY,
 });
 
 export async function POST(
@@ -31,27 +32,29 @@ export async function POST(
       );
     }
 
-    // Get ALL product terms to improve Whisper accuracy - simplified approach
+    // Get ALL product terms to improve transcription accuracy
     const productTerms = await prisma.productTerm.findMany();
     const productTermsList = productTerms.map((term: { term: string }) => term.term);
 
     // Get the file from Vercel Blob
     const response = await fetch(transcription.content);
     const audioBlob = await response.blob();
-
-    // Convert blob to file
+    
+    // Convert Blob to a File object which is supported by the elevenlabs API
     const audioFile = new File([audioBlob], transcription.filename, {
       type: audioBlob.type,
     });
 
-    // Use OpenAI Whisper model for transcription
-    const transcriptionResponse = await openai.audio.transcriptions.create({
+    // Use Eleven Labs Speech to Text API for transcription
+    const transcriptionResponse = await elevenlabs.speechToText.convert({
       file: audioFile,
-      model: 'whisper-1',
-      // Always include product terms in prompt if available
-      prompt: productTermsList.length > 0 
-        ? `This is a business meeting that may mention the following terms: ${productTermsList.join(', ')}.` 
+      model_id: 'scribe_v1',
+      // Use product terms as biased keywords to improve accuracy
+      biased_keywords: productTermsList.length > 0 
+        ? productTermsList.map(term => `${term}:1.0`) 
         : undefined,
+      diarize: true, // Enable speaker detection for meetings
+      tag_audio_events: true, // Include audio events like (laughter), etc.
     });
 
     // Update transcription in database with actual text content
@@ -68,7 +71,9 @@ export async function POST(
       id: updatedTranscription.id,
       content: transcriptionResponse.text, 
       transcription: transcriptionResponse.text,
-      status: 'processed'
+      status: 'processed',
+      language_code: transcriptionResponse.language_code,
+      language_probability: transcriptionResponse.language_probability,
     });
   } catch (error) {
     console.error('Transcription error:', error);

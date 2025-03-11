@@ -1,5 +1,6 @@
 ---
-description: 
+description: Installation Manager
 globs: 
+alwaysApply: false
 ---
 Always use Pnpm please

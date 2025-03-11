@@ -165,7 +165,7 @@ export function UploadForm() {
         {(status === 'uploading' || status === 'transcribing') && (
           <div className="mt-4">
             <p className="text-sm text-muted-foreground">
-              {status === 'uploading' ? 'Uploading...' : 'Transcribing with Whisper...'}
+              {status === 'uploading' ? 'Uploading...' : 'Transcribing...'}
             </p>
             {status === 'transcribing' && (
               <p className="text-xs text-muted-foreground mt-1">

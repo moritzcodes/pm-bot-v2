@@ -11,7 +11,7 @@ export default function ProductTermsPage() {
     <>
       <h1 className="text-2xl font-bold mb-6">Product Terms Configuration</h1>
       <p className="text-muted-foreground mb-6">
-        Add product names and terminology to improve transcription accuracy with Whisper.
+        Add product names and terminology to improve transcription accuracy with our AI.
         These terms will be used to help the AI better recognize specific product names and industry terminology.
       </p>
       <ProductTermsManager />

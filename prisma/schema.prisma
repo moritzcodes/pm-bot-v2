@@ -65,3 +65,19 @@ model ProductTerm {
   // Add relation to Transcription
   transcriptions Transcription[] @relation("TranscriptionToProductTerm")
 }
+
+model Pdf {
+  id           String    @id @default(uuid())
+  filename     String
+  url          String
+  fileSize     Int
+  mimeType     String
+  notes        String?
+  status       String    @default("pending") // pending, processed, failed
+  uploadedAt   DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  enrichedData Json?
+
+  @@index([status])
+}

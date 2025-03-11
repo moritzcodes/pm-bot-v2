@@ -22,6 +22,9 @@ export function Header() {
             <Link href="/upload" className="transition-colors hover:text-foreground/80">
               Upload
             </Link>
+            <Link href="/pdf-upload" className="transition-colors hover:text-foreground/80">
+              PDF Upload
+            </Link>
             <Link href="/transcriptions" className="transition-colors hover:text-foreground/80">
               Transcriptions
             </Link>

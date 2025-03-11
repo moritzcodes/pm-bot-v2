@@ -48,7 +48,7 @@ async function updateEnrichedData<T extends { enrichedData?: any }>(
  * Helper function to add a file to the assistant
  * @param fileId The ID of the file to add
  */
-async function addFileToAssistant(fileId: string) {
+export async function addFileToAssistant(fileId: string) {
   try {
     if (!ASSISTANT_ID) {
       throw new Error('ASSISTANT_ID is not defined');
@@ -79,19 +79,13 @@ async function addFileToAssistant(fileId: string) {
  * Helper function to create a vector store and attach a file to it
  * @param fileId The ID of the file to add
  */
-async function attachFileToVectorStore(fileId: string) {
+export async function attachFileToVectorStore(fileId: string) {
   try {
     if (!ASSISTANT_ID) {
       throw new Error('ASSISTANT_ID is not defined');
     }
     
-    // Create a vector store for the file
-    const vectorStore = await openai.beta.vectorStores.create({
-      name: `Vector store for file ${fileId}`,
-      file_ids: [fileId]
-    });
-    
-    // Get the current assistant to merge with existing tools
+    // Get the current assistant to check for existing vector store
     const currentAssistant = await openai.beta.assistants.retrieve(ASSISTANT_ID);
     
     // Make sure we have the file_search tool
@@ -100,22 +94,51 @@ async function attachFileToVectorStore(fileId: string) {
       tools.push({ type: "file_search" });
     }
     
-    // Update the assistant with the new vector store
-    await openai.beta.assistants.update(
-      ASSISTANT_ID as string,
-      {
-        tools: tools,
-        tool_resources: {
-          file_search: {
-            vector_store_ids: [vectorStore.id]
+    // Check if assistant already has a vector store
+    const toolResources = (currentAssistant as any).tool_resources || {};
+    const fileSearch = toolResources.file_search || {};
+    const existingVectorStoreIds = fileSearch.vector_store_ids || [];
+    let vectorStoreId;
+    
+    if (existingVectorStoreIds.length > 0) {
+      // Add file to the existing vector store
+      vectorStoreId = existingVectorStoreIds[0];
+      console.log(`Adding file ${fileId} to existing vector store ${vectorStoreId}`);
+      
+      await openai.beta.vectorStores.fileBatches.create(
+        vectorStoreId,
+        {
+          file_ids: [fileId]
+        }
+      );
+    } else {
+      // Create a new vector store if none exists
+      console.log(`Creating new vector store for file ${fileId}`);
+      const vectorStore = await openai.beta.vectorStores.create({
+        name: `Vector store for assistant ${ASSISTANT_ID}`,
+        file_ids: [fileId]
+      });
+      vectorStoreId = vectorStore.id;
+    }
+    
+    // Update the assistant with the vector store if needed
+    if (!existingVectorStoreIds.length) {
+      await openai.beta.assistants.update(
+        ASSISTANT_ID as string,
+        {
+          tools: tools,
+          tool_resources: {
+            file_search: {
+              vector_store_ids: [vectorStoreId]
+            }
           }
         }
-      }
-    );
+      );
+    }
     
-    return vectorStore.id;
+    return vectorStoreId;
   } catch (error) {
-    console.error('Error creating vector store and attaching to assistant:', error);
+    console.error('Error attaching file to vector store:', error);
     return null;
   }
 }
@@ -154,7 +177,7 @@ export async function updateEnrichedDataDB(
 /**
  * Helper function for uploading a file to OpenAI
  */
-async function uploadFileToOpenAI(filePath: string, fileType: string) {
+export async function uploadFileToOpenAI(filePath: string, fileType: string) {
   try {
     console.log(`Uploading ${fileType} to OpenAI...`);
     const file = await openai.files.create({

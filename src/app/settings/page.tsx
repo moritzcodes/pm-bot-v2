@@ -52,18 +52,7 @@ export default function SettingsPage() {
           Configure AI models and settings to optimize for your specific needs.
         </p>
         
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="whisperModel" className="text-base">Whisper Transcription Model</Label>
-            <select 
-              id="whisperModel" 
-              className="w-full mt-1 p-2 border rounded-md"
-              defaultValue="whisper-1"
-            >
-              <option value="whisper-1">Whisper (Standard)</option>
-              <option value="whisper-large">Whisper Large (Higher Accuracy)</option>
-            </select>
-          </div>
+        
           
           <div>
             <Label htmlFor="language" className="text-base">Primary Language</Label>
@@ -103,7 +92,6 @@ export default function SettingsPage() {
             </div>
             <Switch id="productTerms" defaultChecked />
           </div>
-        </div>
         
         <div className="mt-6 flex justify-end">
           <Button>

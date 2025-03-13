@@ -29,24 +29,90 @@ export function PdfUploadForm() {
     setError(null);
 
     try {
-      // 1. Upload the PDF file
-      const formData = new FormData();
-      formData.append('file', file);
-      if (notes.trim()) {
-        formData.append('notes', notes);
+      let uploadData;
+      
+      // For large files, use direct upload to Vercel Blob
+      if (file.size > 4 * 1024 * 1024) { // If file is larger than 4MB
+        try {
+          // 1. Get a pre-signed URL for direct upload
+          const directUploadResponse = await fetch('/api/direct-upload', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              filename: file.name,
+              fileType: file.type,
+              fileSize: file.size,
+            }),
+          });
+
+          if (!directUploadResponse.ok) {
+            const errorData = await directUploadResponse.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to get upload URL: ${directUploadResponse.status}`);
+          }
+
+          const { uploadUrl, blobUrl, filename } = await directUploadResponse.json();
+          
+          // 2. Upload directly to Vercel Blob
+          const uploadResponse = await fetch(uploadUrl, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': file.type,
+            },
+            body: file,
+          });
+
+          if (!uploadResponse.ok) {
+            throw new Error(`Failed to upload file to storage: ${uploadResponse.status}`);
+          }
+          
+          // 3. Create a PDF record
+          const createResponse = await fetch('/api/pdfs/create', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              filename: file.name,
+              url: blobUrl,
+              fileSize: file.size,
+              mimeType: file.type,
+              notes: notes,
+            }),
+          });
+          
+          if (!createResponse.ok) {
+            const errorData = await createResponse.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to create PDF record: ${createResponse.status}`);
+          }
+          
+          uploadData = await createResponse.json();
+        } catch (uploadError: any) {
+          console.error('Upload error:', uploadError);
+          throw uploadError;
+        }
+      } else {
+        // For smaller files, use the standard upload
+        const formData = new FormData();
+        formData.append('file', file);
+        if (notes.trim()) {
+          formData.append('notes', notes);
+        }
+
+        const uploadResponse = await fetch('/api/pdfs/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json().catch(() => ({}));
+          throw new Error(errorData.error || `Failed to upload PDF file: ${uploadResponse.status}`);
+        }
+
+        uploadData = await uploadResponse.json();
       }
-
-      const uploadResponse = await fetch('/api/pdfs/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json().catch(() => ({}));
-        throw new Error(errorData.error || `Failed to upload PDF file: ${uploadResponse.status}`);
-      }
-
-      const uploadData = await uploadResponse.json();
+      
       setFileId(uploadData.id);
 
       // 2. Process the PDF and add to vector database

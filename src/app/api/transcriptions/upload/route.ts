@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 // New way to configure API routes in Next.js App Router
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
+// This is important for Vercel - sets the maximum payload size
+export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
   try {
@@ -18,11 +20,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check file size
-    if (file.size > 100 * 1024 * 1024) { // 100MB limit
+    // Check file size - Vercel has a 4.5MB limit for serverless functions
+    if (file.size > 4.5 * 1024 * 1024) {
       return NextResponse.json(
-        { error: 'File size exceeds 100MB limit' },
-        { status: 400 }
+        { error: 'File size exceeds Vercel\'s 4.5MB limit. Please use a smaller file or contact support for alternative upload methods.' },
+        { status: 413 }
       );
     }
 

@@ -1,0 +1,17 @@
+{
+  "functions": {
+    "api/**/*": {
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  },
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1",
+      "headers": {
+        "Connection": "keep-alive"
+      }
+    }
+  ]
+} 

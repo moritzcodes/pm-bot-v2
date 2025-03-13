@@ -37,25 +37,80 @@ export function UploadForm() {
     setError(null);
 
     try {
-      // 1. Upload the file to get a URL
-      const formData = new FormData();
-      formData.append('file', file);
+      let transcriptionId;
+      
+      // For large files, we'll use a different approach
+      if (file.size > 4 * 1024 * 1024) { // If file is larger than 4MB
+        // 1. Get a pre-signed URL from Vercel Blob
+        const response = await fetch('/api/transcriptions/get-upload-url', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            filename: file.name,
+            fileType: file.type,
+            fileSize: file.size
+          }),
+        });
 
-      const uploadResponse = await fetch('/api/transcriptions/upload', {
-        method: 'POST',
-        body: formData,
-      });
+        if (!response.ok) {
+          throw new Error('Failed to get upload URL');
+        }
 
-      if (!uploadResponse.ok) {
-        throw new Error('Failed to upload file');
+        const { id, uploadUrl, blobUrl, filename } = await response.json();
+        transcriptionId = id;
+        
+        // 2. Upload directly to the pre-signed URL
+        const uploadResponse = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': file.type,
+          },
+          body: file,
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error('Failed to upload file to storage');
+        }
+        
+        // 3. Update the transcription record with the URL
+        const updateResponse = await fetch(`/api/transcriptions/${id}/update-url`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            url: blobUrl || `https://public.blob.vercel-storage.com/${filename}` 
+          }),
+        });
+        
+        if (!updateResponse.ok) {
+          throw new Error('Failed to update transcription record');
+        }
+      } else {
+        // Original approach for smaller files
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const uploadResponse = await fetch('/api/transcriptions/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!uploadResponse.ok) {
+          throw new Error('Failed to upload file');
+        }
+
+        const { id } = await uploadResponse.json();
+        transcriptionId = id;
       }
 
-      const { id, url } = await uploadResponse.json();
-      setTranscriptionId(id);
+      setTranscriptionId(transcriptionId);
 
-      // 2. Start transcription process
+      // Start transcription process
       setStatus('transcribing');
-      const transcribeResponse = await fetch(`/api/transcriptions/${id}/transcribe`, {
+      const transcribeResponse = await fetch(`/api/transcriptions/${transcriptionId}/transcribe`, {
         method: 'POST',
       });
 

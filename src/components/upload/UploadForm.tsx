@@ -21,6 +21,7 @@ export function UploadForm() {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<UploadStatus>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [fileId, setFileId] = useState<string | null>(null);
   const [transcriptionId, setTranscriptionId] = useState<string | null>(null);
   const [transcription, setTranscription] = useState<string>('');
 
@@ -36,48 +37,28 @@ export function UploadForm() {
     setStatus('uploading');
     setError(null);
 
-    // Add client-side size validation
-    const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
-    if (file.size > MAX_FILE_SIZE) {
-      setError(`File size exceeds limit (500MB)`);
-      return;
-    }
-
     try {
-      // 1. Upload the file to get a URL
       const formData = new FormData();
       formData.append('file', file);
 
       const uploadResponse = await fetch('/api/transcriptions/upload', {
         method: 'POST',
         body: formData,
+        // Add longer timeout for large files
+        signal: AbortSignal.timeout(300000), // 5 minutes timeout
       });
 
       if (!uploadResponse.ok) {
-        throw new Error('Failed to upload file');
+        const errorData = await uploadResponse.json();
+        throw new Error(errorData.error || 'Upload failed');
       }
 
-      const { id, url } = await uploadResponse.json();
-      setTranscriptionId(id);
-
-      // 2. Start transcription process
-      setStatus('transcribing');
-      const transcribeResponse = await fetch(`/api/transcriptions/${id}/transcribe`, {
-        method: 'POST',
-      });
-
-      if (!transcribeResponse.ok) {
-        throw new Error('Failed to transcribe audio');
-      }
-
-      const transcribeData = await transcribeResponse.json();
-
-      // Set transcription for editing
-      setTranscription(transcribeData.transcription || transcribeData.content);
-      setStatus('editing');
-    } catch (err) {
-      console.error('Error:', err);
-      setError(err instanceof Error ? err.message : 'Something went wrong');
+      const data = await uploadResponse.json();
+      setFileId(data.id);
+      setStatus('success');
+    } catch (error) {
+      console.error('Upload error:', error);
+      setError(error instanceof Error ? error.message : 'Upload failed');
       setStatus('error');
     }
   };

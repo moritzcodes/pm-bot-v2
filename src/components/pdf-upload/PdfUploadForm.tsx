@@ -28,15 +28,7 @@ export function PdfUploadForm() {
     setStatus('uploading');
     setError(null);
 
-    // Add client-side size validation
-    const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
-    if (file.size > MAX_FILE_SIZE) {
-      setError(`File size exceeds limit (500MB)`);
-      return;
-    }
-
     try {
-      // 1. Upload the PDF file
       const formData = new FormData();
       formData.append('file', file);
       if (notes.trim()) {
@@ -46,35 +38,21 @@ export function PdfUploadForm() {
       const uploadResponse = await fetch('/api/pdfs/upload', {
         method: 'POST',
         body: formData,
+        // Add longer timeout for large files
+        signal: AbortSignal.timeout(300000), // 5 minutes timeout
       });
 
       if (!uploadResponse.ok) {
-        throw new Error('Failed to upload PDF file');
+        const errorData = await uploadResponse.json();
+        throw new Error(errorData.error || 'Upload failed');
       }
 
       const { id } = await uploadResponse.json();
       setFileId(id);
-
-      // 2. Process the PDF and add to vector database
-      setStatus('processing');
-      const processResponse = await fetch(`/api/pdfs/${id}/process`, {
-        method: 'POST',
-      });
-
-      if (!processResponse.ok) {
-        throw new Error('Failed to process PDF');
-      }
-
-      // Successfully added to assistant
       setStatus('success');
-      
-      // Redirect to a confirmation page or home after success
-      setTimeout(() => {
-        router.push('/');
-      }, 2000);
-    } catch (err) {
-      console.error('Error:', err);
-      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } catch (error) {
+      console.error('Upload error:', error);
+      setError(error instanceof Error ? error.message : 'Upload failed');
       setStatus('error');
     }
   };

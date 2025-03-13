@@ -42,51 +42,64 @@ export function UploadForm() {
       // For large files, we'll use a different approach
       if (file.size > 4 * 1024 * 1024) { // If file is larger than 4MB
         // 1. Get a pre-signed URL from Vercel Blob
-        const response = await fetch('/api/transcriptions/get-upload-url', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ 
-            filename: file.name,
-            fileType: file.type,
-            fileSize: file.size
-          }),
-        });
+        try {
+          const response = await fetch('/api/transcriptions/get-upload-url', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              filename: file.name,
+              fileType: file.type,
+              fileSize: file.size
+            }),
+          });
 
-        if (!response.ok) {
-          throw new Error('Failed to get upload URL');
-        }
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to get upload URL: ${response.status}`);
+          }
 
-        const { id, uploadUrl, blobUrl, filename } = await response.json();
-        transcriptionId = id;
-        
-        // 2. Upload directly to the pre-signed URL
-        const uploadResponse = await fetch(uploadUrl, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': file.type,
-          },
-          body: file,
-        });
+          const data = await response.json();
+          if (!data.uploadUrl) {
+            throw new Error('Invalid response from server: missing upload URL');
+          }
 
-        if (!uploadResponse.ok) {
-          throw new Error('Failed to upload file to storage');
-        }
-        
-        // 3. Update the transcription record with the URL
-        const updateResponse = await fetch(`/api/transcriptions/${id}/update-url`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ 
-            url: blobUrl || `https://public.blob.vercel-storage.com/${filename}` 
-          }),
-        });
-        
-        if (!updateResponse.ok) {
-          throw new Error('Failed to update transcription record');
+          const { id, uploadUrl, blobUrl, filename } = data;
+          transcriptionId = id;
+          
+          // 2. Upload directly to the pre-signed URL
+          const uploadResponse = await fetch(uploadUrl, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': file.type,
+            },
+            body: file,
+          });
+
+          if (!uploadResponse.ok) {
+            throw new Error(`Failed to upload file to storage: ${uploadResponse.status}`);
+          }
+          
+          // 3. Update the transcription record with the URL
+          const updateResponse = await fetch(`/api/transcriptions/${id}/update-url`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              url: blobUrl || `https://public.blob.vercel-storage.com/${filename}` 
+            }),
+          });
+          
+          if (!updateResponse.ok) {
+            throw new Error('Failed to update transcription record');
+          }
+        } catch (uploadError: any) {
+          console.error('Upload error:', uploadError);
+          setError(uploadError.message || 'Failed to upload file');
+          setStatus('error');
+          return;
         }
       } else {
         // Original approach for smaller files

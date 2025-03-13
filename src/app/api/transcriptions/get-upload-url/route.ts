@@ -21,6 +21,15 @@ export async function POST(request: Request) {
       );
     }
 
+    // Verify that the BLOB_READ_WRITE_TOKEN is available
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      console.error('BLOB_READ_WRITE_TOKEN is not defined');
+      return NextResponse.json(
+        { error: 'Storage configuration error' },
+        { status: 500 }
+      );
+    }
+
     // Create a placeholder record in the database
     const transcription = await prisma.transcription.create({
       data: {
@@ -35,19 +44,35 @@ export async function POST(request: Request) {
     // Generate a unique filename to avoid collisions
     const uniqueFilename = `${Date.now()}-${filename}`;
     
-    // Get a URL for client-side upload using an empty buffer instead of Blob
-    const { url } = await put(uniqueFilename, Buffer.from([]), {
-      access: 'public',
-      contentType: fileType,
-      multipart: true,
-    });
+    try {
+      // Get a URL for client-side upload using an empty buffer instead of Blob
+      const { url } = await put(uniqueFilename, Buffer.from([]), {
+        access: 'public',
+        contentType: fileType,
+        multipart: true,
+      });
 
-    return NextResponse.json({
-      id: transcription.id,
-      uploadUrl: url,
-      blobUrl: url.split('?')[0], // Remove query parameters for the final URL
-      filename: uniqueFilename
-    });
+      return NextResponse.json({
+        id: transcription.id,
+        uploadUrl: url,
+        blobUrl: url.split('?')[0], // Remove query parameters for the final URL
+        filename: uniqueFilename
+      });
+    } catch (blobError: any) {
+      console.error('Blob error:', blobError);
+      
+      // If there's an error with Vercel Blob, try to delete the transcription record
+      await prisma.transcription.delete({
+        where: { id: transcription.id }
+      }).catch(deleteError => {
+        console.error('Error deleting transcription after blob error:', deleteError);
+      });
+      
+      return NextResponse.json(
+        { error: 'Failed to generate upload URL: ' + (blobError.message || 'Unknown error') },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     console.error('Error generating upload URL:', error);
     return NextResponse.json(

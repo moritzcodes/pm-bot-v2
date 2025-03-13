@@ -21,4 +21,9 @@ const nextConfig = {
   },
 };
 
+// For Vercel, we need to use environment variables to configure the serverless function
+if (process.env.VERCEL) {
+  console.log('Running on Vercel, using Vercel-specific configuration');
+}
+
 export default nextConfig;

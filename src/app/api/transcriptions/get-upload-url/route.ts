@@ -35,8 +35,8 @@ export async function POST(request: Request) {
     // Generate a unique filename to avoid collisions
     const uniqueFilename = `${Date.now()}-${filename}`;
     
-    // Get a URL for client-side upload
-    const { url } = await put(uniqueFilename, new Blob([]), {
+    // Get a URL for client-side upload using an empty buffer instead of Blob
+    const { url } = await put(uniqueFilename, Buffer.from([]), {
       access: 'public',
       contentType: fileType,
       multipart: true,

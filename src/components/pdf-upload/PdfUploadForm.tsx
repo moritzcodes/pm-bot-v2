@@ -42,7 +42,8 @@ export function PdfUploadForm() {
       });
 
       if (!uploadResponse.ok) {
-        throw new Error('Failed to upload PDF file');
+        const errorData = await uploadResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to upload PDF file: ${uploadResponse.status}`);
       }
 
       const { id } = await uploadResponse.json();
@@ -55,7 +56,8 @@ export function PdfUploadForm() {
       });
 
       if (!processResponse.ok) {
-        throw new Error('Failed to process PDF');
+        const errorData = await processResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to process PDF: ${processResponse.status}`);
       }
 
       // Successfully added to assistant

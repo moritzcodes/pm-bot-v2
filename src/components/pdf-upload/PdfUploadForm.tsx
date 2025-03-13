@@ -28,6 +28,13 @@ export function PdfUploadForm() {
     setStatus('uploading');
     setError(null);
 
+    // Add client-side size validation
+    const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+    if (file.size > MAX_FILE_SIZE) {
+      setError(`File size exceeds limit (500MB)`);
+      return;
+    }
+
     try {
       // 1. Upload the PDF file
       const formData = new FormData();

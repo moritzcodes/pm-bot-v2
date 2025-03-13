@@ -51,12 +51,12 @@ export function UploadForm() {
         throw new Error(errorData.error || `Failed to upload file: ${uploadResponse.status}`);
       }
 
-      const { id } = await uploadResponse.json();
-      setTranscriptionId(id);
+      const uploadData = await uploadResponse.json();
+      setTranscriptionId(uploadData.id);
 
       // Start transcription process
       setStatus('transcribing');
-      const transcribeResponse = await fetch(`/api/transcriptions/${id}/transcribe`, {
+      const transcribeResponse = await fetch(`/api/transcriptions/${uploadData.id}/transcribe`, {
         method: 'POST',
       });
 

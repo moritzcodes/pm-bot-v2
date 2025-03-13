@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 
+// New way to configure API routes in Next.js App Router
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     // Check if the BLOB_READ_WRITE_TOKEN is defined

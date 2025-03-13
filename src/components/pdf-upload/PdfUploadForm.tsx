@@ -46,12 +46,12 @@ export function PdfUploadForm() {
         throw new Error(errorData.error || `Failed to upload PDF file: ${uploadResponse.status}`);
       }
 
-      const { id } = await uploadResponse.json();
-      setFileId(id);
+      const uploadData = await uploadResponse.json();
+      setFileId(uploadData.id);
 
       // 2. Process the PDF and add to vector database
       setStatus('processing');
-      const processResponse = await fetch(`/api/pdfs/${id}/process`, {
+      const processResponse = await fetch(`/api/pdfs/${uploadData.id}/process`, {
         method: 'POST',
       });
 

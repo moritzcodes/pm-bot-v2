@@ -53,7 +53,11 @@ export function UploadForm() {
         throw new Error(errorData.error || 'Upload failed');
       }
 
-      const data = await uploadResponse.json();
+      const data = await uploadResponse.json().catch(() => ({}));
+      if (!data.id) {
+        throw new Error('Invalid response from server');
+      }
+      
       setFileId(data.id);
       setStatus('success');
     } catch (error) {

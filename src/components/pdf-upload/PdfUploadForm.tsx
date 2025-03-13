@@ -42,13 +42,17 @@ export function PdfUploadForm() {
         signal: AbortSignal.timeout(300000), // 5 minutes timeout
       });
 
+      const data = await uploadResponse.json();
+      
       if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json();
-        throw new Error(errorData.error || 'Upload failed');
+        throw new Error(data.error || 'Upload failed');
       }
 
-      const { id } = await uploadResponse.json();
-      setFileId(id);
+      if (!data.id) {
+        throw new Error('Invalid response from server');
+      }
+
+      setFileId(data.id);
       setStatus('success');
     } catch (error) {
       console.error('Upload error:', error);

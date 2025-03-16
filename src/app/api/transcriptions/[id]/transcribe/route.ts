@@ -7,6 +7,9 @@ const elevenlabs = new ElevenLabsClient({
   apiKey: process.env.ELEVENLABS_API_KEY,
 });
 
+// Add timeout configuration
+const TRANSCRIPTION_TIMEOUT = 300000; // 5 minutes
+
 export async function POST(
   request: Request,
   { params }: { params: { id: string } }

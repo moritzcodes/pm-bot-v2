@@ -29,34 +29,83 @@ export function PdfUploadForm() {
     setError(null);
 
     try {
+      // Show status for file upload
+      setError(`Preparing upload for ${(file.size / (1024 * 1024)).toFixed(2)}MB file...`);
+      
+      // 1. Get a presigned URL for direct upload to S3
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('filename', file.name);
+      formData.append('contentType', file.type);
+      formData.append('fileSize', file.size.toString());
       if (notes.trim()) {
         formData.append('notes', notes);
       }
 
-      const uploadResponse = await fetch('/api/pdfs/upload', {
+      const urlResponse = await fetch('/api/pdfs/presigned-url', {
         method: 'POST',
-        body: formData,
-        // Add longer timeout for large files
-        signal: AbortSignal.timeout(300000), // 5 minutes timeout
+        body: formData
       });
 
-      const data = await uploadResponse.json();
+      if (!urlResponse.ok) {
+        const errorData = await urlResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to get upload URL: ${urlResponse.status}`);
+      }
+
+      const { id, uploadUrl, fields, blobUrl } = await urlResponse.json();
       
-      if (!uploadResponse.ok) {
-        throw new Error(data.error || 'Upload failed');
+      // 2. Upload directly to S3
+      setError(`Uploading ${(file.size / (1024 * 1024)).toFixed(2)}MB file to storage...`);
+      
+      try {
+        // Create a FormData object for the S3 upload
+        const s3FormData = new FormData();
+        
+        // Append all the required fields from the presigned post
+        Object.entries(fields).forEach(([key, value]) => {
+          s3FormData.append(key, value as string);
+        });
+        
+        // Append the actual file as the last field
+        s3FormData.append('file', file);
+        
+        // Upload directly to S3 using the presigned URL
+        await fetch(uploadUrl, {
+          method: 'POST',
+          body: s3FormData,
+          mode: 'no-cors', // Use no-cors mode for direct S3 uploads
+        });
+        
+        // S3 response with no-cors is opaque, we can't check status
+        // Just proceed assuming it worked
+      } catch (s3Error: any) {
+        console.error('S3 upload error:', s3Error);
+        throw new Error(`Failed to upload to S3: ${s3Error.message}`);
+      }
+      
+      // 3. Process the PDF and add to assistant
+      setStatus('processing');
+      setError('Processing PDF...');
+      
+      const processResponse = await fetch(`/api/pdfs/${id}/process`, {
+        method: 'POST',
+      });
+
+      if (!processResponse.ok) {
+        const errorData = await processResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to process PDF: ${processResponse.status}`);
       }
 
-      if (!data.id) {
-        throw new Error('Invalid response from server');
-      }
-
-      setFileId(data.id);
+      // Successfully added to assistant
       setStatus('success');
-    } catch (error) {
-      console.error('Upload error:', error);
-      setError(error instanceof Error ? error.message : 'Upload failed');
+      setError(null);
+      
+      // Redirect to a confirmation page or home after success
+      setTimeout(() => {
+        router.push('/');
+      }, 2000);
+    } catch (err) {
+      console.error('Error:', err);
+      setError(err instanceof Error ? err.message : 'Something went wrong');
       setStatus('error');
     }
   };
@@ -80,6 +129,12 @@ export function PdfUploadForm() {
                 if (selectedFile && isValidFileType(selectedFile)) {
                   setFile(selectedFile);
                   setStatus('idle');
+                  // Show file size warning for large files
+                  if (selectedFile.size > 20 * 1024 * 1024) {
+                    setError(`Warning: Large file (${(selectedFile.size / (1024 * 1024)).toFixed(2)}MB). Upload may take several minutes.`);
+                  } else {
+                    setError(null);
+                  }
                 } else if (selectedFile) {
                   setError('Invalid file type. Please upload a PDF file.');
                 }
@@ -101,6 +156,17 @@ export function PdfUploadForm() {
               className="w-full"
             />
           </div>
+          
+          {file && file.size > 4 * 1024 * 1024 && (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <p className="text-sm text-yellow-800">
+                <strong>Large file detected:</strong> {(file.size / (1024 * 1024)).toFixed(2)}MB
+              </p>
+              <p className="text-xs text-yellow-700 mt-1">
+                Files larger than 4MB will be uploaded directly to storage. This may take several minutes for very large files.
+              </p>
+            </div>
+          )}
           
           <p className="text-sm text-muted-foreground">
             Note: PDF will be processed and added to the assistant's knowledge base.

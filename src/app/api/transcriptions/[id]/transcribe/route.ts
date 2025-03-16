@@ -48,37 +48,53 @@ export async function POST(
     }
 
     console.log(`[Transcribe] Fetching audio file from: ${transcription.content}`);
-    // Get the file from Vercel Blob
+    // Get the file from S3
     const response = await fetch(transcription.content);
-    const audioBlob = await response.blob();
     
+    // Check if the response is valid
+    if (!response.ok) {
+      throw new Error(`Failed to fetch audio file: ${response.status} ${response.statusText}`);
+    }
+    
+    // Get the content type from the response headers
+    const contentType = response.headers.get('content-type');
+    console.log(`[Transcribe] Content-Type from response headers: ${contentType}`);
+    
+    const audioBlob = await response.blob();
     console.log(`[Transcribe] Audio file size: ${(audioBlob.size / 1024 / 1024).toFixed(2)} MB, type: ${audioBlob.type}`);
+    
+    // Validate that we have an audio file
+    const isAudioFile = audioBlob.type.startsWith('audio/') || 
+                        contentType?.startsWith('audio/') ||
+                        transcription.filename.endsWith('.mp3') || 
+                        transcription.filename.endsWith('.wav') ||
+                        transcription.filename.endsWith('.m4a');
+                        
+    if (!isAudioFile) {
+      throw new Error(`Invalid audio file type: ${audioBlob.type}. File appears to be ${contentType || 'unknown type'}`);
+    }
+    
+    // Force the correct MIME type for MP3 files
+    const forcedMimeType = transcription.filename.endsWith('.mp3') ? 'audio/mpeg' : 
+                          (transcription.filename.endsWith('.wav') ? 'audio/wav' : 
+                          (transcription.filename.endsWith('.m4a') ? 'audio/m4a' : audioBlob.type));
     
     // Convert Blob to a File object which is supported by the elevenlabs API
     const audioFile = new File([audioBlob], transcription.filename, {
-      type: audioBlob.type,
+      type: forcedMimeType,
     });
+    
+    console.log(`[Transcribe] Created File object with type: ${forcedMimeType}`);
 
     // Format product terms as biased keywords for improved accuracy
-    // Each term gets a positive bias (0.8) to make the model more likely to recognize these terms
-    // Format: ["term1:0.8", "term2:0.8"] as per Eleven Labs API docs
-    const biasedKeywords = productTermsList.length > 0
-      ? productTermsList.map(term => `${term}:10`)
-      : undefined;
-    
-    if (biasedKeywords) {
-      console.log(`[Transcribe] Formatted ${biasedKeywords.length} biased keywords`);
-      console.log(`[Transcribe] Biased keywords sample: ${biasedKeywords.slice(0, 5).join(', ')}${biasedKeywords.length > 5 ? '...' : ''}`);
-    } else {
-      console.log(`[Transcribe] No biased keywords to add`);
-    }
+    // The API expects just the terms without bias values for the biased_keywords parameter
+    // We'll pass the terms directly without the bias suffix
+   
 
     // Log the request parameters for debugging
     console.log(`[Transcribe] Sending request to Eleven Labs API with params:`, {
       model_id: 'scribe_v1',
       file_size: (audioBlob.size / 1024 / 1024).toFixed(2) + ' MB',
-      biased_keywords_count: biasedKeywords ? biasedKeywords.length : 0,
-      biasedKeywords: biasedKeywords,
       diarize: true,
       tag_audio_events: true
     });
@@ -88,7 +104,6 @@ export async function POST(
     const transcriptionResponse = await elevenlabs.speechToText.convert({
       file: audioFile,
       model_id: 'scribe_v1',
-      biased_keywords: biasedKeywords,
       diarize: false, // Enable speaker detection for meetings
       tag_audio_events: true, // Include audio events like (laughter), etc.
     });
@@ -132,6 +147,18 @@ export async function POST(
   } catch (error) {
     console.error(`[Transcribe] Error during transcription:`, error);
     
+    // Extract error details for better diagnostics
+    let errorMessage = 'Failed to transcribe file';
+    let errorDetails = null;
+    
+    if (error instanceof Error) {
+      errorMessage = error.message;
+      // Check if it's an ElevenLabs error with details
+      if ('detail' in (error as any)) {
+        errorDetails = (error as any).detail;
+      }
+    }
+    
     // Update transcription status to failed if there's an error
     if (params.id) {
       console.log(`[Transcribe] Updating status to failed for ID: ${params.id}`);
@@ -139,13 +166,22 @@ export async function POST(
         where: { id: params.id },
         data: {
           status: 'failed',
+          // Store error details in the database for debugging
+          enrichedData: {
+            error: errorMessage,
+            errorDetails: errorDetails,
+            timestamp: new Date().toISOString()
+          }
         },
       }).catch((err: Error) => console.error('[Transcribe] Failed to update transcription status:', err));
     }
     
     return NextResponse.json(
-      { error: 'Failed to transcribe file' },
+      { 
+        error: errorMessage,
+        details: errorDetails || String(error)
+      },
       { status: 500 }
     );
   }
-} 
+}

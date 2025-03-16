@@ -76,14 +76,18 @@ async function addPdfToAssistant(pdfId: string) {
   }
 }
 
+// Configure runtime for longer processing
+export const runtime = 'nodejs';
+export const maxDuration = 300; // 5 minutes
+
 export async function POST(
-  request: NextRequest,
+  req: Request,
   { params }: { params: { id: string } }
 ) {
   try {
     const { id } = params;
-    
-    // Find the PDF in the database
+
+    // Validate that the PDF exists
     const pdf = await db.pdf.findUnique({
       where: { id },
     });
@@ -95,34 +99,46 @@ export async function POST(
       );
     }
 
-    // Check if the PDF is already processed or failed
+    // Check if the PDF is already processed
     if (pdf.status === 'processed') {
+      const enrichedData = pdf.enrichedData as Record<string, any> || {};
       return NextResponse.json({
         success: true,
         message: 'PDF already processed',
-        enrichedData: pdf.enrichedData,
+        fileId: enrichedData.openaiFileId,
+        vectorStoreId: enrichedData.vectorStoreId
       });
     }
 
-    if (pdf.status === 'failed') {
-      return NextResponse.json(
-        { error: 'PDF processing previously failed' },
-        { status: 400 }
-      );
-    }
-
-    // Process the PDF and add to assistant
-    const result = await addPdfToAssistant(id);
-
-    return NextResponse.json({
-      success: true,
-      fileId: result.fileId,
-      vectorStoreId: result.vectorStoreId,
+    // Update the status to processing
+    await db.pdf.update({
+      where: { id },
+      data: { status: 'processing' },
     });
-  } catch (error) {
+
+    try {
+      // Actually process the PDF and add to OpenAI assistant
+      const result = await addPdfToAssistant(id);
+
+      return NextResponse.json({
+        success: true,
+        message: 'PDF processed and added to assistant',
+        fileId: result.fileId,
+        vectorStoreId: result.vectorStoreId
+      });
+    } catch (processingError: any) {
+      // If processing fails, update the status
+      await db.pdf.update({
+        where: { id },
+        data: { status: 'error' },
+      });
+
+      throw processingError;
+    }
+  } catch (error: any) {
     console.error('Error processing PDF:', error);
     return NextResponse.json(
-      { error: 'Failed to process PDF', details: String(error) },
+      { error: error.message || 'Failed to process PDF' },
       { status: 500 }
     );
   }

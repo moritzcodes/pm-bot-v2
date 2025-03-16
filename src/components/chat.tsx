@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { IconArrowUp } from '@/components/ui/icons';
 import Link from "next/link";
-export const maxDuration = 30;
+export const maxDuration = 300;
 
 export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);

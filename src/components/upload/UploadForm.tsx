@@ -179,20 +179,72 @@ export function UploadForm() {
 
       // Start transcription process
       setStatus('transcribing');
-      const transcribeResponse = await fetch(`/api/transcriptions/${uploadData.id}/transcribe`, {
-        method: 'POST',
-      });
-
-      if (!transcribeResponse.ok) {
-        const errorData = await transcribeResponse.json().catch(() => ({}));
-        throw new Error(errorData.error || `Failed to transcribe audio: ${transcribeResponse.status}`);
+      
+      // For larger files, set longer timeout (up to 5 minutes)
+      // Calculate timeout based on file size - larger files need more time
+      const baseTimeoutMs = 60000; // 1 minute base
+      const fileSizeMB = file.size / (1024 * 1024);
+      const timeoutMs = Math.min(300000, Math.max(baseTimeoutMs, Math.floor(fileSizeMB * 5000))); 
+      
+      // For large files over 20MB, inform user it may take time
+      if (fileSizeMB > 20) {
+        setError(`Transcribing ${fileSizeMB.toFixed(1)}MB file, please wait (up to ${Math.ceil(timeoutMs/60000)} minutes)...`);
       }
+      
+      // Track retry attempts for larger files
+      let retryCount = 0;
+      const maxRetries = 2;
+      
+      const attemptTranscription = async () => {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+          
+          const transcribeResponse = await fetch(`/api/transcriptions/${uploadData.id}/transcribe`, {
+            method: 'POST',
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!transcribeResponse.ok) {
+            // Retry logic for large files that may timeout on first attempt
+            if ((transcribeResponse.status === 500 || transcribeResponse.status === 504) 
+                && fileSizeMB > 15 && retryCount < maxRetries) {
+              retryCount++;
+              setError(`Transcription attempt ${retryCount} failed. Retrying (${retryCount}/${maxRetries})...`);
+              return attemptTranscription();
+            }
+            
+            const errorData = await transcribeResponse.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to transcribe audio: ${transcribeResponse.status}`);
+          }
 
-      const transcribeData = await transcribeResponse.json();
+          const transcribeData = await transcribeResponse.json();
 
-      // Set transcription for editing
-      setTranscription(transcribeData.transcription || transcribeData.content);
-      setStatus('editing');
+          // Set transcription for editing
+          setTranscription(transcribeData.transcription || transcribeData.content);
+          setStatus('editing');
+          setError(null);
+        } catch (err) {
+          console.error('Transcription error:', err);
+          if (err instanceof Error && err.name === 'AbortError') {
+            // If timed out and we haven't exceeded retry limit, retry
+            if (retryCount < maxRetries) {
+              retryCount++;
+              setError(`Transcription timed out. Retrying (${retryCount}/${maxRetries})...`);
+              return attemptTranscription();
+            } else {
+              setError('Transcription timed out after multiple attempts. Try a shorter audio file or try again later.');
+            }
+          } else {
+            setError(err instanceof Error ? err.message : 'Failed to transcribe audio');
+          }
+          setStatus('error');
+        }
+      };
+      
+      await attemptTranscription();
     } catch (err) {
       console.error('Error:', err);
       setError(err instanceof Error ? err.message : 'Something went wrong');
@@ -247,8 +299,10 @@ export function UploadForm() {
                   setFile(selectedFile);
                   setStatus('idle');
                   // Show file size warning for large files
-                  if (selectedFile.size > 20 * 1024 * 1024) {
-                    setError(`Warning: Large file (${(selectedFile.size / (1024 * 1024)).toFixed(2)}MB). Upload may take several minutes.`);
+                  if (selectedFile.size > 50 * 1024 * 1024) {
+                    setError(`Warning: Very large file (${(selectedFile.size / (1024 * 1024)).toFixed(2)}MB). Files over 50MB may fail. Consider shortening your audio.`);
+                  } else if (selectedFile.size > 20 * 1024 * 1024) {
+                    setError(`Warning: Large file (${(selectedFile.size / (1024 * 1024)).toFixed(2)}MB). Upload and transcription may take several minutes.`);
                   } else {
                     setError(null);
                   }
@@ -272,6 +326,9 @@ export function UploadForm() {
               </p>
               <p className="text-xs text-yellow-700 mt-1">
                 Large files will be uploaded directly to AWS S3. This may take several minutes for very large files.
+                {file.size > 50 * 1024 * 1024 && (
+                  <span className="font-bold"> Files over 50MB may fail - consider splitting into shorter segments.</span>
+                )}
               </p>
             </div>
           )}

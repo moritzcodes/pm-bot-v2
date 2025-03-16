@@ -1,18 +1,19 @@
-import { NextResponse } from 'next/server';
-import { nanoid } from 'nanoid';
-import { generatePresignedUrl, getS3Url } from '@/lib/s3';
+import { NextRequest, NextResponse } from "next/server";
+import { generatePresignedUrl, getS3Url } from "@/lib/s3";
+import { nanoid } from "nanoid";
 
+// Configure API route settings
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300; // Increase timeout to 5 minutes
+export const maxDuration = 60; // Increase timeout to 60 seconds
 export const runtime = 'nodejs';
 
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const { filename, fileType, fileSize } = await request.json();
+    const { filename, contentType } = await req.json();
     
-    if (!filename || !fileType) {
+    if (!filename || !contentType) {
       return NextResponse.json(
-        { error: 'Filename and file type are required' },
+        { error: "Filename and content type are required" },
         { status: 400 }
       );
     }
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
     
     try {
       // Generate presigned URL for direct upload to S3 with timeout handling
-      const presignedUrl = await generatePresignedUrl(fileKey, fileType);
+      const presignedUrl = await generatePresignedUrl(fileKey, contentType);
       
       // Get the S3 URL for the uploaded file
       const fileUrl = getS3Url(fileKey);

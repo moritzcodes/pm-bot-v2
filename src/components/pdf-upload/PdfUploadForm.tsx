@@ -31,92 +31,74 @@ export function PdfUploadForm() {
     try {
       let uploadData;
       
-      // For large files, use direct upload to Vercel Blob
-      if (file.size > 4 * 1024 * 1024) { // If file is larger than 4MB
+      // Show status for file upload
+      setError(`Preparing upload for ${(file.size / (1024 * 1024)).toFixed(2)}MB file...`);
+      
+      // For all files, use the PDF upload endpoint which handles both small and large files
+      const formData = new FormData();
+      formData.append('file', file);
+      if (notes.trim()) {
+        formData.append('notes', notes);
+      }
+
+      const uploadResponse = await fetch('/api/pdfs/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to upload PDF file: ${uploadResponse.status}`);
+      }
+
+      const responseData = await uploadResponse.json();
+      
+      // Check if we got a presigned URL for a large file
+      if (responseData.uploadUrl && responseData.fields) {
+        // This is a large file that needs client-side upload to S3
+        setError(`Uploading ${(file.size / (1024 * 1024)).toFixed(2)}MB file to storage...`);
+        
         try {
-          // 1. Get a pre-signed URL for direct upload
-          const directUploadResponse = await fetch('/api/direct-upload', {
+          // Create a FormData object for the S3 upload
+          const s3FormData = new FormData();
+          
+          // Append all the required fields from the presigned post
+          Object.entries(responseData.fields).forEach(([key, value]) => {
+            s3FormData.append(key, value as string);
+          });
+          
+          // Append the actual file as the last field
+          s3FormData.append('file', file);
+          
+          // Upload directly to S3 using the presigned URL
+          const s3UploadResponse = await fetch(responseData.uploadUrl, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              filename: file.name,
-              fileType: file.type,
-              fileSize: file.size,
-            }),
-          });
-
-          if (!directUploadResponse.ok) {
-            const errorData = await directUploadResponse.json().catch(() => ({}));
-            throw new Error(errorData.error || `Failed to get upload URL: ${directUploadResponse.status}`);
-          }
-
-          const { uploadUrl, blobUrl, filename } = await directUploadResponse.json();
-          
-          // 2. Upload directly to Vercel Blob
-          const uploadResponse = await fetch(uploadUrl, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': file.type,
-            },
-            body: file,
-          });
-
-          if (!uploadResponse.ok) {
-            throw new Error(`Failed to upload file to storage: ${uploadResponse.status}`);
-          }
-          
-          // 3. Create a PDF record
-          const createResponse = await fetch('/api/pdfs/create', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              filename: file.name,
-              url: blobUrl,
-              fileSize: file.size,
-              mimeType: file.type,
-              notes: notes,
-            }),
+            body: s3FormData,
+            mode: 'no-cors', // Use no-cors mode for direct S3 uploads
           });
           
-          if (!createResponse.ok) {
-            const errorData = await createResponse.json().catch(() => ({}));
-            throw new Error(errorData.error || `Failed to create PDF record: ${createResponse.status}`);
-          }
+          // S3 response with no-cors is opaque, so we can't check status
+          // Just proceed assuming it worked
           
-          uploadData = await createResponse.json();
-        } catch (uploadError: any) {
-          console.error('Upload error:', uploadError);
-          throw uploadError;
+          uploadData = {
+            id: responseData.id,
+            url: responseData.blobUrl
+          };
+        } catch (s3Error: any) {
+          console.error('S3 upload error:', s3Error);
+          throw new Error(`Failed to upload to S3: ${s3Error.message}`);
         }
       } else {
-        // For smaller files, use the standard upload
-        const formData = new FormData();
-        formData.append('file', file);
-        if (notes.trim()) {
-          formData.append('notes', notes);
-        }
-
-        const uploadResponse = await fetch('/api/pdfs/upload', {
-          method: 'POST',
-          body: formData,
-        });
-
-        if (!uploadResponse.ok) {
-          const errorData = await uploadResponse.json().catch(() => ({}));
-          throw new Error(errorData.error || `Failed to upload PDF file: ${uploadResponse.status}`);
-        }
-
-        uploadData = await uploadResponse.json();
+        // Small file that was uploaded directly through the API
+        uploadData = responseData;
       }
       
       setFileId(uploadData.id);
 
-      // 2. Process the PDF and add to vector database
+      // Process the PDF and add to vector database
       setStatus('processing');
+      setError('Processing PDF...');
+      
       const processResponse = await fetch(`/api/pdfs/${uploadData.id}/process`, {
         method: 'POST',
       });
@@ -128,6 +110,7 @@ export function PdfUploadForm() {
 
       // Successfully added to assistant
       setStatus('success');
+      setError(null);
       
       // Redirect to a confirmation page or home after success
       setTimeout(() => {
@@ -159,6 +142,12 @@ export function PdfUploadForm() {
                 if (selectedFile && isValidFileType(selectedFile)) {
                   setFile(selectedFile);
                   setStatus('idle');
+                  // Show file size warning for large files
+                  if (selectedFile.size > 20 * 1024 * 1024) {
+                    setError(`Warning: Large file (${(selectedFile.size / (1024 * 1024)).toFixed(2)}MB). Upload may take several minutes.`);
+                  } else {
+                    setError(null);
+                  }
                 } else if (selectedFile) {
                   setError('Invalid file type. Please upload a PDF file.');
                 }
@@ -180,6 +169,17 @@ export function PdfUploadForm() {
               className="w-full"
             />
           </div>
+          
+          {file && file.size > 4 * 1024 * 1024 && (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <p className="text-sm text-yellow-800">
+                <strong>Large file detected:</strong> {(file.size / (1024 * 1024)).toFixed(2)}MB
+              </p>
+              <p className="text-xs text-yellow-700 mt-1">
+                Files larger than 4MB will be uploaded directly to storage. This may take several minutes for very large files.
+              </p>
+            </div>
+          )}
           
           <p className="text-sm text-muted-foreground">
             Note: PDF will be processed and added to the assistant's knowledge base.

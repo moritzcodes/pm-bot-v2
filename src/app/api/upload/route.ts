@@ -4,7 +4,7 @@ import { nanoid } from "nanoid";
 
 // Configure API route settings
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // Increase timeout to 60 seconds
+export const maxDuration = 300; // Increase timeout to 60 seconds
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {

@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid';
 import { generatePresignedUrl, getS3Url } from '@/lib/s3';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // Increase timeout to 5 minutes
+export const maxDuration = 300; // Increase timeout to 5 minutes
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {

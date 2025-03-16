@@ -78,7 +78,7 @@ async function addPdfToAssistant(pdfId: string) {
 
 // Configure runtime for longer processing
 export const runtime = 'nodejs';
-export const maxDuration = 60; // 5 minutes
+export const maxDuration = 300; // 5 minutes
 
 export async function POST(
   req: Request,

@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 
 // New way to configure API routes in Next.js App Router
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300;
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {

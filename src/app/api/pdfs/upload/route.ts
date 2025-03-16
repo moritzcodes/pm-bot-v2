@@ -5,7 +5,7 @@ import { getS3Url, generatePresignedUrl } from '@/lib/s3';
 
 // Configure runtime for longer file processing
 export const runtime = 'nodejs';
-export const maxDuration = 60; // 5 minutes
+export const maxDuration = 300; // 5 minutes
 
 export async function POST(req: Request) {
   try {

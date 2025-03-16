@@ -20,6 +20,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // Check file size
+    if (file.size > 950 * 1024 * 1024) { // 950MB limit
+      return NextResponse.json(
+        { error: 'File size exceeds 950MB limit' },
+        { status: 400 }
+      );
+    }
+
     // Validate AWS credentials are configured
     if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY || !process.env.AWS_S3_BUCKET_NAME) {
       console.error("Missing AWS credentials or bucket name");

@@ -1,21 +1,18 @@
 import { NextResponse } from 'next/server';
-import { nanoid } from 'nanoid';
-import { generatePresignedUrl, getS3Url } from '@/lib/s3';
 import { db } from '@/lib/db';
-import { pdfs } from '@/db/schema';
+import { nanoid } from 'nanoid';
+import { getS3Url, generatePresignedUrl } from '@/lib/s3';
 
-// New way to configure API routes in Next.js App Router
-export const dynamic = 'force-dynamic';
-export const maxDuration = 300; // 5 minutes
-// This is important for Vercel - sets the maximum payload size
+// Configure runtime for longer file processing
 export const runtime = 'nodejs';
+export const maxDuration = 300; // 5 minutes
 
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File;
     const notes = formData.get('notes') as string || '';
-    
+
     if (!file) {
       return NextResponse.json(
         { error: 'No file received' },
@@ -56,15 +53,17 @@ export async function POST(req: Request) {
       const { url, fields } = await generatePresignedUrl(s3Key, file.type);
       
       // Create the PDF record before the upload
-      const [newPdf] = await db.insert(pdfs).values({
-        id: fileId,
-        filename: file.name,
-        url: s3Url,
-        fileSize: file.size,
-        mimeType: file.type,
-        notes,
-        status: 'pending',
-      }).returning();
+      const newPdf = await db.pdf.create({
+        data: {
+          id: fileId,
+          filename: file.name,
+          url: s3Url,
+          fileSize: file.size,
+          mimeType: file.type,
+          notes,
+          status: 'pending',
+        },
+      });
 
       // Return the presigned URL to the client for direct upload
       return NextResponse.json({
@@ -84,24 +83,37 @@ export async function POST(req: Request) {
       const fileBuffer = Buffer.from(fileArrayBuffer);
       
       // Create the PDF record
-      const [newPdf] = await db.insert(pdfs).values({
-        id: fileId,
-        filename: file.name,
-        url: s3Url,
-        fileSize: file.size,
-        mimeType: file.type,
-        notes,
-        status: 'pending',
-      }).returning();
+      const newPdf = await db.pdf.create({
+        data: {
+          id: fileId,
+          filename: file.name,
+          url: s3Url,
+          fileSize: file.size,
+          mimeType: file.type,
+          notes,
+          status: 'pending',
+        },
+      });
       
       try {
         // Upload to S3 using the S3 upload API
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
-        if (!baseUrl) {
-          throw new Error('Unable to determine API URL. Check NEXT_PUBLIC_API_URL or VERCEL_URL environment variables.');
+        // Determine API URL with better fallbacks
+        let baseUrl = process.env.NEXT_PUBLIC_API_URL;
+        
+        // If NEXT_PUBLIC_API_URL is not set, try to use VERCEL_URL
+        if (!baseUrl && process.env.VERCEL_URL) {
+          baseUrl = `https://${process.env.VERCEL_URL}`;
         }
         
-        const uploadEndpoint = process.env.S3_UPLOAD_API || `${baseUrl}/api/upload-s3`;
+        // If we're in development (and not in Vercel), use localhost
+        if (!baseUrl && process.env.NODE_ENV === 'development') {
+          baseUrl = 'http://localhost:3000';
+        }
+        
+        // If we still don't have a baseUrl, use a relative URL which will work if
+        // the API endpoint is on the same server
+        const uploadEndpoint = process.env.S3_UPLOAD_API || 
+                            (baseUrl ? `${baseUrl}/api/upload-s3` : '/api/upload-s3');
         
         const uploadResponse = await fetch(uploadEndpoint, {
           method: 'POST',
@@ -117,13 +129,17 @@ export async function POST(req: Request) {
 
         if (!uploadResponse.ok) {
           // If upload fails, delete the PDF record
-          await db.delete(pdfs).where({ id: fileId });
+          await db.pdf.delete({
+            where: { id: fileId }
+          });
           const errorData = await uploadResponse.json().catch(() => ({}));
           throw new Error(errorData.error || `Failed to upload to S3: ${uploadResponse.status}`);
         }
       } catch (error: any) {
         // If upload fails, delete the PDF record
-        await db.delete(pdfs).where({ id: fileId });
+        await db.pdf.delete({
+          where: { id: fileId }
+        });
         return NextResponse.json(
           { error: `Failed to upload to S3: ${error.message}` },
           { status: 500 }

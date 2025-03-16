@@ -29,77 +29,64 @@ export function PdfUploadForm() {
     setError(null);
 
     try {
-      let uploadData;
-      
       // Show status for file upload
       setError(`Preparing upload for ${(file.size / (1024 * 1024)).toFixed(2)}MB file...`);
       
-      // For all files, use the PDF upload endpoint which handles both small and large files
+      // 1. Get a presigned URL for direct upload to S3
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('filename', file.name);
+      formData.append('contentType', file.type);
+      formData.append('fileSize', file.size.toString());
       if (notes.trim()) {
         formData.append('notes', notes);
       }
 
-      const uploadResponse = await fetch('/api/pdfs/upload', {
+      const urlResponse = await fetch('/api/pdfs/presigned-url', {
         method: 'POST',
-        body: formData,
+        body: formData
       });
 
-      if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json().catch(() => ({}));
-        throw new Error(errorData.error || `Failed to upload PDF file: ${uploadResponse.status}`);
+      if (!urlResponse.ok) {
+        const errorData = await urlResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to get upload URL: ${urlResponse.status}`);
       }
 
-      const responseData = await uploadResponse.json();
+      const { id, uploadUrl, fields, blobUrl } = await urlResponse.json();
       
-      // Check if we got a presigned URL for a large file
-      if (responseData.uploadUrl && responseData.fields) {
-        // This is a large file that needs client-side upload to S3
-        setError(`Uploading ${(file.size / (1024 * 1024)).toFixed(2)}MB file to storage...`);
+      // 2. Upload directly to S3
+      setError(`Uploading ${(file.size / (1024 * 1024)).toFixed(2)}MB file to storage...`);
+      
+      try {
+        // Create a FormData object for the S3 upload
+        const s3FormData = new FormData();
         
-        try {
-          // Create a FormData object for the S3 upload
-          const s3FormData = new FormData();
-          
-          // Append all the required fields from the presigned post
-          Object.entries(responseData.fields).forEach(([key, value]) => {
-            s3FormData.append(key, value as string);
-          });
-          
-          // Append the actual file as the last field
-          s3FormData.append('file', file);
-          
-          // Upload directly to S3 using the presigned URL
-          const s3UploadResponse = await fetch(responseData.uploadUrl, {
-            method: 'POST',
-            body: s3FormData,
-            mode: 'no-cors', // Use no-cors mode for direct S3 uploads
-          });
-          
-          // S3 response with no-cors is opaque, so we can't check status
-          // Just proceed assuming it worked
-          
-          uploadData = {
-            id: responseData.id,
-            url: responseData.blobUrl
-          };
-        } catch (s3Error: any) {
-          console.error('S3 upload error:', s3Error);
-          throw new Error(`Failed to upload to S3: ${s3Error.message}`);
-        }
-      } else {
-        // Small file that was uploaded directly through the API
-        uploadData = responseData;
+        // Append all the required fields from the presigned post
+        Object.entries(fields).forEach(([key, value]) => {
+          s3FormData.append(key, value as string);
+        });
+        
+        // Append the actual file as the last field
+        s3FormData.append('file', file);
+        
+        // Upload directly to S3 using the presigned URL
+        await fetch(uploadUrl, {
+          method: 'POST',
+          body: s3FormData,
+          mode: 'no-cors', // Use no-cors mode for direct S3 uploads
+        });
+        
+        // S3 response with no-cors is opaque, we can't check status
+        // Just proceed assuming it worked
+      } catch (s3Error: any) {
+        console.error('S3 upload error:', s3Error);
+        throw new Error(`Failed to upload to S3: ${s3Error.message}`);
       }
       
-      setFileId(uploadData.id);
-
-      // Process the PDF and add to vector database
+      // 3. Process the PDF and add to assistant
       setStatus('processing');
       setError('Processing PDF...');
       
-      const processResponse = await fetch(`/api/pdfs/${uploadData.id}/process`, {
+      const processResponse = await fetch(`/api/pdfs/${id}/process`, {
         method: 'POST',
       });
 
